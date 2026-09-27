@@ -69,6 +69,7 @@ private:
     std::unique_ptr<uitk::lvgl_cpp::Container> _left_eye;
     std::unique_ptr<uitk::lvgl_cpp::Container> _right_eye;
     std::unique_ptr<uitk::lvgl_cpp::Container> _mouth;
+    std::unique_ptr<uitk::lvgl_cpp::Label> _status_ticker;
     int _color_index = 0;
 };
 

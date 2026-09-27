@@ -23,6 +23,7 @@ static const uint32_t _bg_color = 0x000000;
 
 Screensaver::~Screensaver()
 {
+    _status_ticker.reset();
     _prev_screen->load();
 }
 
@@ -68,6 +69,12 @@ void Screensaver::onInit()
     _mouth->setBorderWidth(0);
     _mouth->setSize(18, 2);
     _mouth->setRadius(0);
+
+    _status_ticker = std::make_unique<Label>(_screen->get());
+    _status_ticker->setText("[GCP] Healthy | GKE: 100% | Cost: Normal");
+    _status_ticker->setTextFont(&lv_font_montserrat_14);
+    _status_ticker->setTextColor(lv_color_hex(0x38BDF8));
+    _status_ticker->align(LV_ALIGN_BOTTOM_MID, 0, -8);
 }
 
 void Screensaver::onBuildLevel()
