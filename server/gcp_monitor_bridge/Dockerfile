@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Run as non-root user for security
-RUN useradd -u 10001 -m appuser && chown -R appuser:appuser /app
+RUN mkdir -p /app/credentials && useradd -u 10001 -m appuser && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8080

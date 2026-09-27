@@ -1,6 +1,18 @@
 import os
 from pydantic_settings import BaseSettings
 
+# Automatically materialize credentials if passed via GCP_SA_JSON env var
+_gcp_sa_json = os.getenv("GCP_SA_JSON", "").strip()
+_default_creds_path = "/app/credentials/gcp-sa.json"
+if _gcp_sa_json and not os.path.exists(_default_creds_path):
+    try:
+        os.makedirs(os.path.dirname(_default_creds_path), exist_ok=True)
+        with open(_default_creds_path, "w") as _f:
+            _f.write(_gcp_sa_json)
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _default_creds_path
+    except Exception:
+        pass
+
 class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8080
