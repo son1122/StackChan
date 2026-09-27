@@ -21,8 +21,8 @@ public:
     void setApiKey(const std::string& key);
     const std::string& getApiKey() const { return _api_key; }
 
-    // Synchronous or cached fetch
-    bool fetchTelemetry(GcpTelemetry& telemetry);
+    // Synchronous or cached fetch (optionally for a specific project)
+    bool fetchTelemetry(GcpTelemetry& telemetry, const std::string& project_id = "");
 
     // Get latest cached data
     const GcpTelemetry& getCachedTelemetry() const { return _cached_data; }

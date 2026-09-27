@@ -38,12 +38,19 @@ async def health_check():
     return {"status": "healthy", "service": "stackchan-gcp-bridge"}
 
 @app.get("/api/v1/gcp/status", dependencies=[Depends(verify_api_key)])
-async def get_gcp_status():
+async def get_gcp_status(project: str | None = None):
     """
     Primary endpoint for StackChan ESP32-S3.
-    Returns compact, high-efficiency JSON summary of all GCP services.
+    Returns compact, high-efficiency JSON summary of GCP services (Fleet or specific project).
     """
-    return collector.get_telemetry()
+    return collector.get_telemetry(project_id=project)
+
+@app.get("/api/v1/gcp/projects", dependencies=[Depends(verify_api_key)])
+async def get_gcp_projects():
+    """
+    Returns list of all monitored projects with basic health metrics.
+    """
+    return collector.get_projects_list()
 
 @app.get("/api/v1/gcp/summary", dependencies=[Depends(verify_api_key)])
 async def get_gcp_summary():
@@ -56,11 +63,13 @@ async def get_gcp_summary():
     vm_count = data.get("vm", {}).get("instances_running", 0)
     mtd = data.get("billing", {}).get("mtd_usd", 0.0)
     alerts = data.get("incident_count", 0)
+    total_projects = data.get("total_projects", 1)
     
     return {
         "status": status_str,
-        "ticker": f"[{status_str}] GKE: {gke_pods} Pods | VM: {vm_count} Up | Cost: ${mtd:.2f} | Alerts: {alerts}",
-        "incident_count": alerts
+        "ticker": f"[{status_str}] Fleet ({total_projects} Projects): {gke_pods} Pods | {vm_count} VMs | ${mtd:.2f} MTD | Alerts: {alerts}",
+        "incident_count": alerts,
+        "total_projects": total_projects
     }
 
 if __name__ == "__main__":

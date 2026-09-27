@@ -26,4 +26,6 @@ private:
     uint32_t _last_poll_ms;
     uint32_t _last_touch_ms;
     uint32_t _last_motion_ms;
+    int _head_touch_conn;
+    bool _event_head_tap;
 };

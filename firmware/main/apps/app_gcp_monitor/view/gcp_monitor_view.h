@@ -20,8 +20,12 @@ public:
     void update(const gcp_monitor::GcpTelemetry& data);
     void nextPage();
     void prevPage();
+    void nextProject(int total_projects);
+    void prevProject(int total_projects);
 
     int getCurrentPage() const { return _current_page; }
+    int getCurrentProjectIndex() const { return _current_project_index; }
+    void setCurrentProjectIndex(int idx) { _current_project_index = idx; }
 
 private:
     void renderPage(const gcp_monitor::GcpTelemetry& data);
@@ -40,7 +44,8 @@ private:
     std::unique_ptr<uitk::lvgl_cpp::Label> _line4;
     std::unique_ptr<uitk::lvgl_cpp::Label> _line5;
 
-    int _current_page = 0; // 0: Overview, 1: Compute, 2: Data
+    int _current_page = 0;          // 0: Overview, 1: Compute, 2: Data/Billing
+    int _current_project_index = 0; // 0: All Fleet, 1..N: Specific Project
 };
 
 } // namespace gcp_monitor_view

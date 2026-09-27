@@ -19,8 +19,17 @@ class Settings(BaseSettings):
     
     # GCP Configuration
     gcp_project_id: str = os.getenv("GCP_PROJECT_ID", "demo-gcp-project")
+    gcp_project_ids_raw: str = os.getenv("GCP_PROJECT_IDS", "")
     google_application_credentials: str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
     gcp_billing_account_id: str = os.getenv("GCP_BILLING_ACCOUNT_ID", "")
+
+    @property
+    def project_ids(self) -> list[str]:
+        if self.gcp_project_ids_raw.strip():
+            return [p.strip() for p in self.gcp_project_ids_raw.split(",") if p.strip()]
+        if self.gcp_project_id and self.gcp_project_id != "demo-gcp-project":
+            return [self.gcp_project_id]
+        return ["prod-cluster", "staging-env", "data-analytics"]
     
     # Security: Optional API Key for Header Authentication (Pangolin / Public reverse proxy)
     bridge_api_key: str = os.getenv("BRIDGE_API_KEY", "").strip()

@@ -5,9 +5,19 @@
  */
 #pragma once
 #include <string>
+#include <vector>
 #include <cstdint>
 
 namespace gcp_monitor {
+
+struct ProjectSummary {
+    std::string project_id = "";
+    std::string status = "ok";
+    int incident_count = 0;
+    float billing_mtd = 0.0f;
+    int pods_running = 0;
+    int vms_running = 0;
+};
 
 struct GcpBilling {
     float mtd_usd = 128.45f;
@@ -55,6 +65,10 @@ struct BigQueryStatus {
 };
 
 struct GcpTelemetry {
+    std::string project_id = "ALL FLEET";
+    bool is_fleet = true;
+    int total_projects = 1;
+    int current_project_index = 0; // 0 = Fleet, 1..N = Specific Project
     std::string overall_status = "ok"; // "ok", "warning", "critical"
     int incident_count = 0;
     uint32_t last_updated_time = 0;
@@ -65,6 +79,7 @@ struct GcpTelemetry {
     CloudRunStatus cloud_run;
     CloudSqlStatus cloud_sql;
     BigQueryStatus bigquery;
+    std::vector<ProjectSummary> projects;
 };
 
 } // namespace gcp_monitor
