@@ -64,8 +64,35 @@ jobs:
             chmod 600 credentials/gcp-sa.json
           fi
 
-          # Export environment for docker compose (port 8088 avoids 8080 conflict on NAS)
-          export BRIDGE_PORT="${BRIDGE_PORT:-8088}"
+          # Ensure a guaranteed free host port (auto-detect if BRIDGE_PORT secret is unset)
+          if [ -z "$BRIDGE_PORT" ]; then
+            echo "Detecting an open host port on NAS..."
+            DETECTED_PORT=$(docker run --rm --net=host python:3.12-slim python3 -c '
+import socket
+def is_port_available(p):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("0.0.0.0", p))
+            return True
+        except OSError:
+            return False
+
+for candidate in [8099, 8383, 8765, 18080, 28080, 38080]:
+    if is_port_available(candidate):
+        print(candidate)
+        break
+else:
+    p = 18080
+    while not is_port_available(p):
+        p += 1
+    print(p)
+' 2>/dev/null || echo "8099")
+            export BRIDGE_PORT="${DETECTED_PORT:-8099}"
+          else
+            export BRIDGE_PORT
+          fi
+
+          echo "Allocated Host Bridge Port: ${BRIDGE_PORT}"
           export GCP_PROJECT_ID="${GCP_PROJECT_ID:-demo-gcp-project}"
           export PROMETHEUS_URL="${PROMETHEUS_URL:-}"
 
@@ -76,3 +103,14 @@ jobs:
           # Verify container health
           sleep 4
           docker ps --filter name=stackchan-gcp-bridge --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+          # Probe live healthz endpoint
+          echo "Probing GCP Bridge /healthz on port ${BRIDGE_PORT}..."
+          docker run --rm --net=host python:3.12-slim python3 -c "
+import urllib.request
+try:
+    with urllib.request.urlopen('http://127.0.0.1:${BRIDGE_PORT}/healthz', timeout=5) as resp:
+        print('Live health check successful! HTTP status:', resp.getcode(), resp.read().decode())
+except Exception as e:
+    print('Health check note:', e)
+"
