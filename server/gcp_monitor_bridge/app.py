@@ -1,6 +1,8 @@
+import secrets
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, Security, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
 from collectors.gcp_collector import collector
 from config import settings
 
@@ -18,11 +20,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(api_key: str = Security(api_key_header)):
+    # If BRIDGE_API_KEY is unset, allow unauthenticated access (e.g. local LAN dev)
+    if not settings.bridge_api_key:
+        return True
+    if not api_key or not secrets.compare_digest(api_key, settings.bridge_api_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized: Invalid or missing X-API-Key header"
+        )
+    return True
+
 @app.get("/healthz")
 async def health_check():
     return {"status": "healthy", "service": "stackchan-gcp-bridge"}
 
-@app.get("/api/v1/gcp/status")
+@app.get("/api/v1/gcp/status", dependencies=[Depends(verify_api_key)])
 async def get_gcp_status():
     """
     Primary endpoint for StackChan ESP32-S3.
@@ -30,7 +45,7 @@ async def get_gcp_status():
     """
     return collector.get_telemetry()
 
-@app.get("/api/v1/gcp/summary")
+@app.get("/api/v1/gcp/summary", dependencies=[Depends(verify_api_key)])
 async def get_gcp_summary():
     """
     Shorter 1-line summary for ambient screensaver and text tickers.

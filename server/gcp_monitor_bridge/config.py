@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     google_application_credentials: str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
     gcp_billing_account_id: str = os.getenv("GCP_BILLING_ACCOUNT_ID", "")
     
+    # Security: Optional API Key for Header Authentication (Pangolin / Public reverse proxy)
+    bridge_api_key: str = os.getenv("BRIDGE_API_KEY", "").strip()
+    
     # Optional Prometheus / OpenTelemetry Gateway
     prometheus_url: str = os.getenv("PROMETHEUS_URL", "")
     

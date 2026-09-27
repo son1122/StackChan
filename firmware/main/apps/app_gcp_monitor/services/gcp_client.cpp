@@ -53,6 +53,11 @@ void GcpClient::setEndpoint(const std::string& url)
     _endpoint = url;
 }
 
+void GcpClient::setApiKey(const std::string& key)
+{
+    _api_key = key;
+}
+
 bool GcpClient::fetchTelemetry(GcpTelemetry& telemetry)
 {
     uint32_t now = GetHAL().millis();
@@ -73,6 +78,9 @@ bool GcpClient::fetchTelemetry(GcpTelemetry& telemetry)
 
         esp_http_client_handle_t client = esp_http_client_init(&config);
         if (client != nullptr) {
+            if (!_api_key.empty()) {
+                esp_http_client_set_header(client, "X-API-Key", _api_key.c_str());
+            }
             esp_err_t err = esp_http_client_open(client, 0);
             if (err == ESP_OK) {
                 int content_length = esp_http_client_fetch_headers(client);

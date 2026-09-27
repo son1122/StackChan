@@ -18,6 +18,9 @@ public:
     void setEndpoint(const std::string& url);
     const std::string& getEndpoint() const { return _endpoint; }
 
+    void setApiKey(const std::string& key);
+    const std::string& getApiKey() const { return _api_key; }
+
     // Synchronous or cached fetch
     bool fetchTelemetry(GcpTelemetry& telemetry);
 
@@ -26,6 +29,7 @@ public:
 
 private:
     std::string _endpoint;
+    std::string _api_key;
     GcpTelemetry _cached_data;
     uint32_t _last_fetch_ms;
 };

@@ -44,6 +44,7 @@ jobs:
         timeout-minutes: 15
         env:
           BRIDGE_PORT: ${{ secrets.BRIDGE_PORT }}
+          BRIDGE_API_KEY: ${{ secrets.BRIDGE_API_KEY }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_SA_JSON: ${{ secrets.GCP_SA_JSON }}
           PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
@@ -67,6 +68,7 @@ jobs:
           # Export environment for docker compose
           export GCP_PROJECT_ID="${GCP_PROJECT_ID:-demo-gcp-project}"
           export GCP_SA_JSON="${GCP_SA_JSON:-}"
+          export BRIDGE_API_KEY="${BRIDGE_API_KEY:-}"
           export PROMETHEUS_URL="${PROMETHEUS_URL:-}"
 
           # Stop previous container if running, rebuild and launch detached
