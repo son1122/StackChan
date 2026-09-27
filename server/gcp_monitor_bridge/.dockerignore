@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+credentials/
+*credentials*.json
+*sa*.json
+*.pem
+*.key
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+*.log

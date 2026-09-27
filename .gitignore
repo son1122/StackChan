@@ -1,2 +1,28 @@
 .DS_Store
 .idea/
+.vscode/
+
+# Environment files and credentials
+.env
+.env.*
+!.env.example
+credentials/
+*credentials*.json
+*service_account*.json
+*sa*.json
+*.pem
+*.key
+*.p12
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Build artifacts & logs
+*.log

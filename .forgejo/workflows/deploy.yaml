@@ -1,0 +1,47 @@
+name: Deploy StackChan GCP Bridge to NAS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'server/gcp_monitor_bridge/**'
+      - '.forgejo/workflows/deploy.yaml'
+
+jobs:
+  deploy:
+    name: Build & Run Bridge Container
+    runs-on: [ nas ]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Deploy Bridge Container via Docker Compose
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_SA_JSON: ${{ secrets.GCP_SA_JSON }}
+          PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
+        run: |
+          cd server/gcp_monitor_bridge
+
+          # Ensure safe credentials directory
+          mkdir -p credentials
+          chmod 700 credentials
+
+          # If GCP Service Account JSON secret is provided in Forgejo, write it securely
+          if [ -n "$GCP_SA_JSON" ]; then
+            echo "$GCP_SA_JSON" > credentials/gcp-sa.json
+            chmod 600 credentials/gcp-sa.json
+          fi
+
+          # Export environment for docker compose
+          export GCP_PROJECT_ID="${GCP_PROJECT_ID:-demo-gcp-project}"
+          export PROMETHEUS_URL="${PROMETHEUS_URL:-}"
+
+          # Stop previous container if running, rebuild and launch detached
+          docker compose down || true
+          docker compose up -d --build --remove-orphans
+
+          # Verify container health
+          sleep 4
+          docker ps --filter name=stackchan-gcp-bridge --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
