@@ -14,7 +14,7 @@ namespace gcp_monitor {
 
 
 GcpClient::GcpClient()
-    : _endpoint("http://127.0.0.1:8080/api/v1/gcp/status"),
+    : _endpoint("http://127.0.0.1:8088/api/v1/gcp/status"),
       _last_fetch_ms(0)
 {
     // Initialize default fallback data

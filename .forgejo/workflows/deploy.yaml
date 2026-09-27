@@ -43,6 +43,7 @@ jobs:
       - name: Deploy Bridge Container via Docker Compose
         timeout-minutes: 15
         env:
+          BRIDGE_PORT: ${{ secrets.BRIDGE_PORT }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_SA_JSON: ${{ secrets.GCP_SA_JSON }}
           PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
@@ -63,7 +64,8 @@ jobs:
             chmod 600 credentials/gcp-sa.json
           fi
 
-          # Export environment for docker compose
+          # Export environment for docker compose (port 8088 avoids 8080 conflict on NAS)
+          export BRIDGE_PORT="${BRIDGE_PORT:-8088}"
           export GCP_PROJECT_ID="${GCP_PROJECT_ID:-demo-gcp-project}"
           export PROMETHEUS_URL="${PROMETHEUS_URL:-}"
 

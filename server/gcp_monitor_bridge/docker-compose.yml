@@ -6,7 +6,7 @@ services:
     container_name: stackchan-gcp-bridge
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${BRIDGE_PORT:-8088}:8080"
     environment:
       - GCP_PROJECT_ID=${GCP_PROJECT_ID:-demo-gcp-project}
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcp-sa.json
