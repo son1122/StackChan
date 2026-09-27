@@ -67,26 +67,7 @@ jobs:
           # Ensure a guaranteed free host port (auto-detect if BRIDGE_PORT secret is unset)
           if [ -z "$BRIDGE_PORT" ]; then
             echo "Detecting an open host port on NAS..."
-            DETECTED_PORT=$(docker run --rm --net=host python:3.12-slim python3 -c '
-import socket
-def is_port_available(p):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind(("0.0.0.0", p))
-            return True
-        except OSError:
-            return False
-
-for candidate in [8099, 8383, 8765, 18080, 28080, 38080]:
-    if is_port_available(candidate):
-        print(candidate)
-        break
-else:
-    p = 18080
-    while not is_port_available(p):
-        p += 1
-    print(p)
-' 2>/dev/null || echo "8099")
+            DETECTED_PORT=$(docker run --rm --net=host -v "$PWD":/app -w /app python:3.12-slim python3 find_free_port.py 2>/dev/null || echo "8099")
             export BRIDGE_PORT="${DETECTED_PORT:-8099}"
           else
             export BRIDGE_PORT
@@ -106,11 +87,4 @@ else:
 
           # Probe live healthz endpoint
           echo "Probing GCP Bridge /healthz on port ${BRIDGE_PORT}..."
-          docker run --rm --net=host python:3.12-slim python3 -c "
-import urllib.request
-try:
-    with urllib.request.urlopen('http://127.0.0.1:${BRIDGE_PORT}/healthz', timeout=5) as resp:
-        print('Live health check successful! HTTP status:', resp.getcode(), resp.read().decode())
-except Exception as e:
-    print('Health check note:', e)
-"
+          docker run --rm --net=host python:3.12-slim python3 -c "import urllib.request; resp = urllib.request.urlopen('http://127.0.0.1:${BRIDGE_PORT}/healthz', timeout=5); print('Live health check successful! HTTP status:', resp.getcode(), resp.read().decode())" || echo "Health check probe finished."
