@@ -9,5 +9,7 @@ services:
       - GCP_PROJECT_ID=${GCP_PROJECT_ID:-demo-gcp-project}
       - GCP_SA_JSON=${GCP_SA_JSON:-}
       - BRIDGE_API_KEY=${BRIDGE_API_KEY:-}
+      - BRIDGE_USERNAME=${BRIDGE_USERNAME:-stackchan1}
+      - BRIDGE_PASSWORD=${BRIDGE_PASSWORD:-qRHKJXR0Ntieu3LmpmKKKFpP}
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcp-sa.json
       - PROMETHEUS_URL=${PROMETHEUS_URL:-}

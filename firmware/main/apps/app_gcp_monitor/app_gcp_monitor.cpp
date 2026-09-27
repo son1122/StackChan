@@ -49,6 +49,9 @@ void AppGcpMonitor::onOpen()
 #ifdef STACKCHAN_GCP_API_KEY
     _client->setApiKey(STACKCHAN_GCP_API_KEY);
 #endif
+#ifdef STACKCHAN_GCP_AUTH_HEADER
+    _client->setBasicAuth(STACKCHAN_GCP_AUTH_HEADER);
+#endif
     _view   = std::make_unique<gcp_monitor_view::GcpMonitorView>();
     _view->init();
 

@@ -54,6 +54,8 @@ GcpClient::~GcpClient()
 {
 }
 
+#include <mbedtls/base64.h>
+
 void GcpClient::setEndpoint(const std::string& url)
 {
     _endpoint = url;
@@ -62,6 +64,24 @@ void GcpClient::setEndpoint(const std::string& url)
 void GcpClient::setApiKey(const std::string& key)
 {
     _api_key = key;
+}
+
+void GcpClient::setBasicAuth(const std::string& auth_header)
+{
+    _auth_header = auth_header;
+}
+
+void GcpClient::setCredentials(const std::string& username, const std::string& password)
+{
+    if (username.empty()) {
+        _auth_header.clear();
+        return;
+    }
+    std::string raw = username + ":" + password;
+    size_t out_len = 0;
+    unsigned char buf[128] = {0};
+    mbedtls_base64_encode(buf, sizeof(buf) - 1, &out_len, (const unsigned char*)raw.data(), raw.size());
+    _auth_header = "Basic " + std::string((char*)buf, out_len);
 }
 
 bool GcpClient::fetchTelemetry(GcpTelemetry& telemetry, const std::string& project_id)
@@ -89,6 +109,9 @@ bool GcpClient::fetchTelemetry(GcpTelemetry& telemetry, const std::string& proje
 
         esp_http_client_handle_t client = esp_http_client_init(&config);
         if (client != nullptr) {
+            if (!_auth_header.empty()) {
+                esp_http_client_set_header(client, "Authorization", _auth_header.c_str());
+            }
             if (!_api_key.empty()) {
                 esp_http_client_set_header(client, "X-API-Key", _api_key.c_str());
             }

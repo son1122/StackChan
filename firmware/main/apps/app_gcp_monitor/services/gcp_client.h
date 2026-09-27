@@ -21,6 +21,9 @@ public:
     void setApiKey(const std::string& key);
     const std::string& getApiKey() const { return _api_key; }
 
+    void setBasicAuth(const std::string& auth_header);
+    void setCredentials(const std::string& username, const std::string& password);
+
     // Synchronous or cached fetch (optionally for a specific project)
     bool fetchTelemetry(GcpTelemetry& telemetry, const std::string& project_id = "");
 
@@ -30,6 +33,7 @@ public:
 private:
     std::string _endpoint;
     std::string _api_key;
+    std::string _auth_header;
     GcpTelemetry _cached_data;
     uint32_t _last_fetch_ms;
 };

@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # Security: Optional API Key for Header Authentication (Pangolin / Public reverse proxy)
     bridge_api_key: str = os.getenv("BRIDGE_API_KEY", "").strip()
     
+    # Security: Basic Authentication Credentials
+    bridge_username: str = os.getenv("BRIDGE_USERNAME", "stackchan1").strip()
+    bridge_password: str = os.getenv("BRIDGE_PASSWORD", "").strip()
+    
     # Optional Prometheus / OpenTelemetry Gateway
     prometheus_url: str = os.getenv("PROMETHEUS_URL", "")
     
