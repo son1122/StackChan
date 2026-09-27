@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Demo / Simulation mode if GCP credentials are not found
     enable_mock_fallback: bool = True
 
+    # Security: Allowed CORS origins
+    allowed_origins: list[str] = ["http://localhost", "http://localhost:3000", "http://127.0.0.1", "http://127.0.0.1:8080"]
+
     class Config:
         env_file = ".env"
         extra = "ignore"
