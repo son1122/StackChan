@@ -10,6 +10,10 @@
 #include <stackchan/stackchan.h>
 #include "../common/common.h"
 
+#if __has_include("gcp_secret_config.h")
+#include "gcp_secret_config.h"
+#endif
+
 using namespace mooncake;
 using namespace gcp_monitor;
 
@@ -37,6 +41,12 @@ void AppGcpMonitor::onOpen()
     LvglLockGuard lock;
 
     _client = std::make_unique<GcpClient>();
+#ifdef STACKCHAN_GCP_ENDPOINT
+    _client->setEndpoint(STACKCHAN_GCP_ENDPOINT);
+#endif
+#ifdef STACKCHAN_GCP_API_KEY
+    _client->setApiKey(STACKCHAN_GCP_API_KEY);
+#endif
     _view   = std::make_unique<gcp_monitor_view::GcpMonitorView>();
     _view->init();
 

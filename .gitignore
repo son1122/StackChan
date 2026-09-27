@@ -13,6 +13,8 @@ credentials/
 *.pem
 *.key
 *.p12
+*secret*.h
+*.local.h
 
 # Python artifacts
 __pycache__/
