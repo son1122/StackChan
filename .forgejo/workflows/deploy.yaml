@@ -55,14 +55,11 @@ jobs:
 
           cd server/gcp_monitor_bridge
 
-          # Determine host port (auto-detect free host port if BRIDGE_PORT is unset)
-          if [ -z "$BRIDGE_PORT" ]; then
-            echo "Auto-detecting available host port on NAS..."
-            DETECTED_PORT=$(docker run --rm --net=host python:3.12-slim python3 -c "exec(\"import socket\ndef f(p):\n try:\n  s=socket.socket();s.bind(('0.0.0.0',p));s.close();return True\n except:\n  return False\nprint(next((p for p in [8099,8383,8765,18080,28080,38080] if f(p)),8099))\")" 2>/dev/null || echo "8099")
-            export BRIDGE_PORT="${DETECTED_PORT:-8099}"
-          else
-            export BRIDGE_PORT
-          fi
+          # Stop previous container first to release host port
+          docker compose down || true
+
+          # Target host port configured on Pangolin reverse proxy (default 8099)
+          export BRIDGE_PORT="${BRIDGE_PORT:-8099}"
           echo "Selected Host Bridge Port: ${BRIDGE_PORT}"
 
           # Export environment for docker compose
@@ -71,8 +68,7 @@ jobs:
           export BRIDGE_API_KEY="${BRIDGE_API_KEY:-}"
           export PROMETHEUS_URL="${PROMETHEUS_URL:-}"
 
-          # Stop previous container if running, rebuild and launch detached
-          docker compose down || true
+          # Rebuild and launch detached
           docker compose up -d --build --remove-orphans
 
           # If GCP Service Account JSON secret is provided, inject it securely into container
