@@ -41,29 +41,16 @@ jobs:
           echo "Checked out commit $(git rev-parse --short HEAD)"
 
       - name: Deploy Bridge Container via Docker Compose
-        timeout-minutes: 3
+        timeout-minutes: 4
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_SA_JSON: ${{ secrets.GCP_SA_JSON }}
           PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
         run: |
-          # 1. Ensure docker and docker compose tools exist in runner environment
-          if ! command -v docker &> /dev/null; then
-            echo "Installing docker-cli and docker-cli-compose on runner..."
-            apk add --no-cache docker-cli docker-cli-compose || true
-          fi
+          echo "Runner Docker Environment:"
+          docker --version
+          docker compose version
 
-          # Detect compose syntax
-          if docker compose version &> /dev/null; then
-            COMPOSE_CMD="docker compose"
-          elif command -v docker-compose &> /dev/null; then
-            COMPOSE_CMD="docker-compose"
-          else
-            echo "Error: Docker compose command not found"
-            exit 1
-          fi
-
-          echo "Using compose command: ${COMPOSE_CMD}"
           cd server/gcp_monitor_bridge
 
           # Ensure safe credentials directory
@@ -81,8 +68,8 @@ jobs:
           export PROMETHEUS_URL="${PROMETHEUS_URL:-}"
 
           # Stop previous container if running, rebuild and launch detached
-          $COMPOSE_CMD down || true
-          $COMPOSE_CMD up -d --build --remove-orphans
+          docker compose down || true
+          docker compose up -d --build --remove-orphans
 
           # Verify container health
           sleep 4
