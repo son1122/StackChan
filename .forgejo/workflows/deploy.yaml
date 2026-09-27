@@ -13,8 +13,24 @@ jobs:
     name: Build & Run Bridge Container
     runs-on: [ nas ]
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Checkout Code
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          echo "Checking out ${REPO} @ ${SHA}..."
+          git init
+          git config --global --add safe.directory "$PWD"
+          # Try internal docker network first, fallback to external domain
+          if git -c http.sslVerify=false fetch --depth 1 "http://forgejo:3000/${REPO}.git" "${SHA}"; then
+            echo "Fetched successfully from internal Forgejo network"
+          else
+            echo "Fetching via external URL..."
+            git -c http.sslVerify=false fetch --depth 1 "https://token:${TOKEN}@${SERVER_URL#*://}/${REPO}.git" "${SHA}"
+          fi
+          git checkout --force FETCH_HEAD
 
       - name: Deploy Bridge Container via Docker Compose
         env:
