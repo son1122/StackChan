@@ -12,7 +12,7 @@ jobs:
   deploy:
     name: Build & Run Bridge Container
     runs-on: [ nas ]
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
       - name: Checkout Code
         timeout-minutes: 2
@@ -41,7 +41,7 @@ jobs:
           echo "Checked out commit $(git rev-parse --short HEAD)"
 
       - name: Deploy Bridge Container via Docker Compose
-        timeout-minutes: 4
+        timeout-minutes: 15
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_SA_JSON: ${{ secrets.GCP_SA_JSON }}
