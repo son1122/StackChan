@@ -12,27 +12,36 @@ jobs:
   deploy:
     name: Build & Run Bridge Container
     runs-on: [ nas ]
+    timeout-minutes: 5
     steps:
       - name: Checkout Code
+        timeout-minutes: 2
         env:
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SERVER_URL: ${{ github.server_url }}
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           echo "Checking out ${REPO} @ ${SHA}..."
           git init
           git config --global --add safe.directory "$PWD"
-          # Try internal docker network first, fallback to external domain
-          if git -c http.sslVerify=false fetch --depth 1 "http://forgejo:3000/${REPO}.git" "${SHA}"; then
+          git config http.sslVerify false
+
+          # Authenticate with token directly to prevent credential prompt from waiting on stdin
+          if git fetch --depth 1 "http://oauth2:${TOKEN}@forgejo:3000/${REPO}.git" "${SHA}"; then
             echo "Fetched successfully from internal Forgejo network"
+          elif git fetch --depth 1 "https://oauth2:${TOKEN}@${SERVER_URL#*://}/${REPO}.git" "${SHA}"; then
+            echo "Fetched successfully from domain"
           else
-            echo "Fetching via external URL..."
-            git -c http.sslVerify=false fetch --depth 1 "https://token:${TOKEN}@${SERVER_URL#*://}/${REPO}.git" "${SHA}"
+            echo "Fallback shallow fetch..."
+            git -c http.extraHeader="Authorization: token ${TOKEN}" fetch --depth 1 "http://forgejo:3000/${REPO}.git" "${SHA}"
           fi
           git checkout --force FETCH_HEAD
+          echo "Checked out commit $(git rev-parse --short HEAD)"
 
       - name: Deploy Bridge Container via Docker Compose
+        timeout-minutes: 3
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_SA_JSON: ${{ secrets.GCP_SA_JSON }}
