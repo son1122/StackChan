@@ -46,6 +46,7 @@ jobs:
           BRIDGE_PORT: ${{ secrets.BRIDGE_PORT }}
           BRIDGE_API_KEY: ${{ secrets.BRIDGE_API_KEY }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_PROJECT_IDS: ${{ secrets.GCP_PROJECT_IDS }}
           GCP_SA_JSON: ${{ secrets.GCP_SA_JSON }}
           PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
         run: |
@@ -63,7 +64,8 @@ jobs:
           echo "Selected Host Bridge Port: ${BRIDGE_PORT}"
 
           # Export environment for docker compose
-          export GCP_PROJECT_ID="${GCP_PROJECT_ID:-demo-gcp-project}"
+          export GCP_PROJECT_ID="${GCP_PROJECT_ID:-insurverse-develop}"
+          export GCP_PROJECT_IDS="${GCP_PROJECT_IDS:-insurverse-develop,insurverse-uat}"
           export GCP_SA_JSON="${GCP_SA_JSON:-}"
           export BRIDGE_API_KEY="${BRIDGE_API_KEY:-}"
           export BRIDGE_USERNAME="${BRIDGE_USERNAME:-stackchan1}"
