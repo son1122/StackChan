@@ -1,10 +1,12 @@
 import secrets
 import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, Security, Header, status
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader, HTTPBasic, HTTPBasicCredentials
 from collectors.gcp_collector import collector
 from config import settings
+from dashboard import get_dashboard_html
 
 app = FastAPI(
     title="StackChan GCP Monitor Bridge",
@@ -103,6 +105,48 @@ async def get_gcp_summary():
         "incident_count": alerts,
         "total_projects": total_projects
     }
+
+@app.get("/", response_class=HTMLResponse, dependencies=[Depends(verify_authentication)])
+@app.get("/dashboard", response_class=HTMLResponse, dependencies=[Depends(verify_authentication)])
+async def get_dashboard():
+    """
+    Renders interactive web dashboard with animated StackChan avatar and real-time metrics.
+    """
+    return HTMLResponse(content=get_dashboard_html(), status_code=200)
+
+@app.get("/metrics")
+async def get_prometheus_metrics():
+    """
+    Prometheus metrics exporter for GCP fleet monitoring.
+    """
+    telemetry = collector.get_telemetry()
+    lines = [
+        "# HELP stackchan_gcp_status 1 if fleet is healthy, 0 if warning or incident",
+        "# TYPE stackchan_gcp_status gauge",
+        f"stackchan_gcp_status {1 if telemetry.get('status') == 'ok' else 0}",
+        "# HELP stackchan_gcp_incident_count Total active alerts and incidents",
+        "# TYPE stackchan_gcp_incident_count gauge",
+        f"stackchan_gcp_incident_count {telemetry.get('incident_count', 0)}",
+    ]
+    for p in telemetry.get("projects", []):
+        pid = p.get("project_id", "unknown")
+        vm_running = p.get("vm", {}).get("instances_running", 0)
+        vm_total = p.get("vm", {}).get("instances_total", 0)
+        vm_cpu = p.get("vm", {}).get("avg_cpu_pct", 0.0)
+        nodes = p.get("gke", {}).get("nodes_up", 0)
+        pods = p.get("gke", {}).get("pods_running", 0)
+        sql = p.get("cloud_sql", {}).get("instances_up", 0)
+        run = p.get("cloud_run", {}).get("services_count", 0)
+        mtd = p.get("billing", {}).get("mtd_usd", 0.0)
+        lines.append(f'stackchan_gcp_instances_running{{project="{pid}"}} {vm_running}')
+        lines.append(f'stackchan_gcp_instances_total{{project="{pid}"}} {vm_total}')
+        lines.append(f'stackchan_gcp_vm_cpu_utilization_pct{{project="{pid}"}} {vm_cpu}')
+        lines.append(f'stackchan_gcp_gke_nodes{{project="{pid}"}} {nodes}')
+        lines.append(f'stackchan_gcp_gke_pods{{project="{pid}"}} {pods}')
+        lines.append(f'stackchan_gcp_cloud_sql_instances{{project="{pid}"}} {sql}')
+        lines.append(f'stackchan_gcp_cloud_run_services{{project="{pid}"}} {run}')
+        lines.append(f'stackchan_gcp_billing_mtd_usd{{project="{pid}"}} {mtd}')
+    return PlainTextResponse("\n".join(lines) + "\n")
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host=settings.host, port=settings.port, reload=False)
