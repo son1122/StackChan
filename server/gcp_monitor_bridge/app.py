@@ -1,7 +1,11 @@
 import os
+import time
 import secrets
+import logging
+import threading
+from typing import Dict, Any, List, Optional
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, Security, Header, status
+from fastapi import FastAPI, Depends, HTTPException, Security, Header, Request, status
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader, HTTPBasic, HTTPBasicCredentials
@@ -9,17 +13,19 @@ from collectors.gcp_collector import collector
 from config import settings
 from dashboard import get_dashboard_html
 
+logger = logging.getLogger("gcp_bridge")
+
 app = FastAPI(
     title="StackChan GCP Monitor Bridge",
     description="Bridge API aggregating GCP services (GKE, VMs, Cloud Run, Cloud SQL, BigQuery, Billing) for StackChan robot",
-    version="1.0.0"
+    version="1.1.0"
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -75,17 +81,121 @@ async def verify_authentication(
         headers={"WWW-Authenticate": "Basic realm=\"StackChan GCP Bridge\""},
     )
 
+class RobotRegistry:
+    def __init__(self):
+        self._robots: Dict[str, Dict[str, Any]] = {}
+        self._lock = threading.Lock()
+
+    def record_heartbeat(
+        self,
+        mac: str,
+        ip: str,
+        project: Optional[str] = None,
+        battery: Optional[str] = None,
+        charging: Optional[str] = None,
+        version: Optional[str] = None
+    ):
+        if not mac:
+            return
+        now = time.time()
+        batt_val = None
+        if battery is not None and str(battery).isdigit():
+            batt_val = max(0, min(100, int(battery)))
+
+        is_charging = charging in ("1", "true", "True", True)
+
+        with self._lock:
+            self._robots[mac] = {
+                "mac": mac,
+                "ip": ip,
+                "project": project or "ALL FLEET",
+                "battery": batt_val,
+                "charging": is_charging,
+                "version": version or "1.0.0",
+                "last_seen": now,
+            }
+
+    def get_robots(self) -> List[Dict[str, Any]]:
+        now = time.time()
+        result = []
+        with self._lock:
+            for mac, r in self._robots.items():
+                sec_ago = int(now - r["last_seen"])
+                is_online = sec_ago < 60
+                result.append({
+                    **r,
+                    "online": is_online,
+                    "last_seen_sec_ago": sec_ago
+                })
+        return sorted(result, key=lambda x: x["last_seen"], reverse=True)
+
+robot_registry = RobotRegistry()
+
 @app.get("/healthz")
 async def health_check():
     return {"status": "healthy", "service": "stackchan-gcp-bridge"}
 
 @app.get("/api/v1/gcp/status", dependencies=[Depends(verify_authentication)])
-async def get_gcp_status(project: str | None = None):
+async def get_gcp_status(
+    request: Request,
+    project: str | None = None,
+    x_robot_mac: Optional[str] = Header(None, alias="X-Robot-MAC"),
+    x_robot_battery: Optional[str] = Header(None, alias="X-Robot-Battery"),
+    x_robot_charging: Optional[str] = Header(None, alias="X-Robot-Charging"),
+    x_robot_project: Optional[str] = Header(None, alias="X-Robot-Project"),
+    x_robot_version: Optional[str] = Header(None, alias="X-Robot-Version"),
+):
     """
     Primary endpoint for StackChan ESP32-S3.
     Returns compact, high-efficiency JSON summary of GCP services (Fleet or specific project).
+    Also registers live robot presence, battery, and target project.
     """
+    client_ip = request.client.host if request.client else "unknown"
+    if x_robot_mac:
+        robot_registry.record_heartbeat(
+            mac=x_robot_mac,
+            ip=client_ip,
+            project=x_robot_project or project,
+            battery=x_robot_battery,
+            charging=x_robot_charging,
+            version=x_robot_version
+        )
     return collector.get_telemetry(project_id=project)
+
+@app.get("/api/v1/gcp/robots", dependencies=[Depends(verify_authentication)])
+async def get_connected_robots():
+    """
+    Returns list of connected physical StackChan robots with battery, IP, and assigned project.
+    """
+    return {"robots": robot_registry.get_robots()}
+
+@app.post("/api/v1/gcp/webhook", dependencies=[Depends(verify_authentication)])
+async def gcp_alert_webhook(payload: Dict[str, Any]):
+    """
+    Receives incident push alerts directly from Google Cloud Monitoring Alerting channels.
+    Immediately updates the project state so connected StackChans react in real-time.
+    """
+    incident = payload.get("incident", {})
+    state = incident.get("state", "OPEN").upper()
+    project_id = incident.get("scoping_project_id") or incident.get("project_id")
+    summary = incident.get("summary") or incident.get("condition_name") or "GCP Cloud Monitoring Alert"
+    incident_id = incident.get("incident_id")
+
+    logger.warning(f"Received GCP Alert Webhook: state={state}, project={project_id}, summary={summary}")
+
+    collector.handle_external_alert(
+        project_id=project_id,
+        state=state,
+        summary=summary,
+        incident_id=incident_id
+    )
+
+    return {
+        "status": "processed",
+        "state": state,
+        "project_id": project_id,
+        "summary": summary
+    }
 
 @app.get("/api/v1/gcp/projects", dependencies=[Depends(verify_authentication)])
 async def get_gcp_projects():

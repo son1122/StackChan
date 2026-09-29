@@ -115,6 +115,20 @@ bool GcpClient::fetchTelemetry(GcpTelemetry& telemetry, const std::string& proje
             if (!_api_key.empty()) {
                 esp_http_client_set_header(client, "X-API-Key", _api_key.c_str());
             }
+
+            // Report robot telemetry & identity to bridge registry
+            std::string mac = GetHAL().getFactoryMacString(":");
+            if (!mac.empty()) {
+                esp_http_client_set_header(client, "X-Robot-MAC", mac.c_str());
+            }
+            uint8_t batt = GetHAL().getBatteryLevel();
+            std::string batt_str = std::to_string((int)batt);
+            esp_http_client_set_header(client, "X-Robot-Battery", batt_str.c_str());
+            esp_http_client_set_header(client, "X-Robot-Charging", GetHAL().isBatteryCharging() ? "1" : "0");
+            if (!project_id.empty()) {
+                esp_http_client_set_header(client, "X-Robot-Project", project_id.c_str());
+            }
+
             esp_err_t err = esp_http_client_open(client, 0);
             if (err == ESP_OK) {
                 esp_http_client_fetch_headers(client);

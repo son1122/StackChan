@@ -297,6 +297,7 @@ public:
     /* ---------------------------------- Audio --------------------------------- */
     void setSpeakerVolume(uint8_t volume, bool permanent = false);
     uint8_t getSpeakerVolume();
+    void playAlertTone(uint16_t freq_hz = 880, uint16_t duration_ms = 200);
     std::string startMicTest(std::function<void(MicTestStatus)> onStatusUpdate);
     void getMicWaveformFrame(std::vector<int16_t>& data);
     void clearupMicTest();

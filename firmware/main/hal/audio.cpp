@@ -156,6 +156,37 @@ void Hal::getMicWaveformFrame(std::vector<int16_t>& data)
     }
 }
 
+void Hal::playAlertTone(uint16_t freq_hz, uint16_t duration_ms)
+{
+    auto& board      = Board::GetInstance();
+    auto audio_codec = board.GetAudioCodec();
+    if (!audio_codec) {
+        return;
+    }
+
+    if (!audio_codec->output_enabled()) {
+        audio_codec->EnableOutput(true);
+    }
+
+    const size_t sample_rate = 16000;
+    const size_t total_samples = (sample_rate * duration_ms) / 1000;
+    std::vector<int16_t> chunk;
+    chunk.reserve(256);
+
+    for (size_t i = 0; i < total_samples; ++i) {
+        float angle = 2.0f * 3.14159265f * freq_hz * ((float)i / sample_rate);
+        int16_t sample = static_cast<int16_t>(sinf(angle) * 12000.0f);
+        chunk.push_back(sample);
+        if (chunk.size() >= 256) {
+            audio_codec->OutputData(chunk);
+            chunk.clear();
+        }
+    }
+    if (!chunk.empty()) {
+        audio_codec->OutputData(chunk);
+    }
+}
+
 void Hal::clearupMicTest()
 {
     auto& board      = Board::GetInstance();

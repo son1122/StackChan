@@ -486,6 +486,121 @@ def get_dashboard_html() -> str:
             user-select: all;
         }
 
+        .robots-panel {
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 12px;
+            padding: 14px 18px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 12px;
+        }
+
+        .robots-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .robots-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .robots-count-badge {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+            font-size: 0.72rem;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-weight: 600;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .robots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 10px;
+        }
+
+        .robot-card {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 10px 14px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: border-color 0.2s;
+        }
+
+        .robot-card:hover {
+            border-color: rgba(56, 189, 248, 0.4);
+        }
+
+        .robot-card-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .robot-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+            box-shadow: 0 0 8px #22c55e;
+        }
+
+        .robot-status-dot.offline {
+            background: #64748b;
+            box-shadow: none;
+        }
+
+        .robot-mac {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.82rem;
+            color: #f8fafc;
+            font-weight: 600;
+        }
+
+        .robot-meta {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+
+        .robot-card-right {
+            text-align: right;
+        }
+
+        .robot-target-badge {
+            background: rgba(56, 189, 248, 0.1);
+            color: #38bdf8;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 3px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        .robot-battery {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #22c55e;
+        }
+
+        .robot-empty {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            font-style: italic;
+            padding: 6px 0;
+        }
+
         footer {
             margin-top: auto;
             text-align: center;
@@ -653,6 +768,15 @@ def get_dashboard_html() -> str:
                         <div class="progress-bar-bg">
                             <div class="progress-bar-fill" id="bar-billing-budget" style="width: 30%; background:#22c55e;"></div>
                         </div>
+                    </div>
+                <!-- Connected Robots Fleet Panel -->
+                <div class="robots-panel" id="robots-panel">
+                    <div class="robots-header">
+                        <span class="robots-title">🤖 Active Connected StackChans</span>
+                        <span class="robots-count-badge" id="robots-count">0 Online</span>
+                    </div>
+                    <div class="robots-grid" id="robots-container">
+                        <div class="robot-empty">No physical StackChan currently reporting. Polling...</div>
                     </div>
                 </div>
 
@@ -828,10 +952,62 @@ def get_dashboard_html() -> str:
             renderData(data);
         }
 
+        async function fetchRobots() {
+            try {
+                const resp = await fetch('/api/v1/gcp/robots');
+                if (resp.status === 200) {
+                    const data = await resp.json();
+                    renderRobots(data.robots || []);
+                }
+            } catch (e) {
+                console.error("Robots fetch failed:", e);
+            }
+        }
+
+        function renderRobots(robots) {
+            const countBadge = document.getElementById('robots-count');
+            const container = document.getElementById('robots-container');
+            if (!container || !countBadge) return;
+
+            const onlineCount = robots.filter(r => r.online).length;
+            countBadge.innerText = `${onlineCount} Online`;
+
+            if (robots.length === 0) {
+                container.innerHTML = '<div class="robot-empty">No physical StackChan currently reporting. Polling...</div>';
+                return;
+            }
+
+            let html = '';
+            for (const r of robots) {
+                const isOnline = r.online;
+                const battStr = (r.battery !== null) ? `${r.charging ? '⚡' : '🔋'} ${r.battery}%` : '⚡ DC Power';
+                const dotClass = isOnline ? 'robot-status-dot' : 'robot-status-dot offline';
+                const timeText = (r.last_seen_sec_ago < 5) ? 'Just now' : `${r.last_seen_sec_ago}s ago`;
+
+                html += `
+                    <div class="robot-card">
+                        <div class="robot-card-left">
+                            <div class="${dotClass}"></div>
+                            <div>
+                                <div class="robot-mac">${r.mac}</div>
+                                <div class="robot-meta">${r.ip} • ${timeText}</div>
+                            </div>
+                        </div>
+                        <div class="robot-card-right">
+                            <span class="robot-target-badge">${r.project}</span>
+                            <div class="robot-battery" style="color: ${isOnline ? '#22c55e' : '#64748b'};">${battStr}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+
         async function loadLiveTelemetry() {
             isManualOverride = false;
             const data = await fetchTelemetry(currentProject);
             renderData(data);
+            await fetchRobots();
         }
 
         // Auto-refresh loop every 5 seconds
@@ -840,6 +1016,7 @@ def get_dashboard_html() -> str:
                 const data = await fetchTelemetry(currentProject);
                 renderData(data);
             }
+            fetchRobots();
         }, 5000);
 
         // Initial Load

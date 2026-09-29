@@ -148,6 +148,18 @@ void AppGcpMonitor::onRunning()
             current_status = _telemetry.projects[p_idx].status;
         }
 
+        static std::string last_alert_status = "ok";
+        if (current_status == "incident" && last_alert_status != "incident") {
+            // Incident alert chime (urgent double-beep: 880Hz then 1175Hz)
+            GetHAL().playAlertTone(880, 150);
+            GetHAL().delay(80);
+            GetHAL().playAlertTone(1175, 200);
+        } else if (current_status == "warning" && last_alert_status == "ok") {
+            // Soft single warning chime (660Hz)
+            GetHAL().playAlertTone(660, 150);
+        }
+        last_alert_status = current_status;
+
         if (current_status == "ok") {
             // Gentle nodding when healthy
             static bool toggle = false;

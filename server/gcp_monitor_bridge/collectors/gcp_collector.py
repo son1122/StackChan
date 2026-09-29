@@ -479,4 +479,25 @@ class GCPCollector:
         fleet = self.get_telemetry()
         return fleet.get("projects_summary", [])
 
+    def handle_external_alert(self, project_id: Optional[str], state: str, summary: str, incident_id: Optional[str] = None):
+        """
+        Processes push alerts from Cloud Monitoring Webhooks instantly.
+        """
+        with self._lock:
+            target_pids = [project_id] if (project_id and project_id in self.cached_projects) else list(self.cached_projects.keys())
+            for pid in target_pids:
+                if pid in self.cached_projects:
+                    proj = self.cached_projects[pid]
+                    if state == "OPEN":
+                        proj["status"] = "incident"
+                        proj["incident_count"] = max(proj.get("incident_count", 0), 1)
+                    elif state == "CLOSED":
+                        proj["incident_count"] = max(proj.get("incident_count", 1) - 1, 0)
+                        if proj["incident_count"] == 0:
+                            proj["status"] = "ok"
+
+            # Re-aggregate fleet
+            if self.cached_projects:
+                self.cached_fleet = self._aggregate_fleet(list(self.cached_projects.values()))
+
 collector = GCPCollector()

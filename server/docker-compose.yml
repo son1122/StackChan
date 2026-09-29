@@ -1,0 +1,39 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: stackchan-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-stackchan_root_secret}
+      MYSQL_DATABASE: stackChan
+      MYSQL_USER: ${MYSQL_USER:-stackchan}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-stackchan_password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./check_list/create_mysql_database.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-stackchan_root_secret}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  stackchan-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stackchan-server
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "12800:12800"
+    environment:
+      - GF_GDB_DEFAULT_LINK=mysql:${MYSQL_USER:-stackchan}:${MYSQL_PASSWORD:-stackchan_password}@tcp(mysql:3306)/stackChan?loc=Local&parseTime=true
+    volumes:
+      - ./logs:/app/logs
+
+volumes:
+  mysql_data:
