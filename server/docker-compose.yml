@@ -35,5 +35,26 @@ services:
     volumes:
       - ./logs:/app/logs
 
+  gcp-bridge:
+    build:
+      context: ./gcp_monitor_bridge
+      dockerfile: Dockerfile
+    container_name: stackchan-gcp-bridge
+    restart: unless-stopped
+    ports:
+      - "${BRIDGE_PORT:-8099}:8080"
+    environment:
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID:-insurverse-develop}
+      - GCP_PROJECT_IDS=${GCP_PROJECT_IDS:-insurverse-develop,insurverse-uat,insurverse-app-63261,personal-453403,gen-lang-client-0923310914}
+      - GCP_SA_JSON=${GCP_SA_JSON:-}
+      - BRIDGE_API_KEY=${BRIDGE_API_KEY:-}
+      - BRIDGE_USERNAME=${BRIDGE_USERNAME:-stackchan1}
+      - BRIDGE_PASSWORD=${BRIDGE_PASSWORD:-changeme123}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcp-sa.json
+      - PROMETHEUS_URL=${PROMETHEUS_URL:-}
+    volumes:
+      - ./gcp_monitor_bridge/credentials:/app/credentials:ro
+
 volumes:
   mysql_data:
+
