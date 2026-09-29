@@ -52,9 +52,8 @@ services:
       - BRIDGE_PASSWORD=${BRIDGE_PASSWORD:-changeme123}
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcp-sa.json
       - PROMETHEUS_URL=${PROMETHEUS_URL:-}
-    volumes:
-      - ./gcp_monitor_bridge/credentials:/app/credentials
 
 volumes:
   mysql_data:
+
 

@@ -74,22 +74,15 @@ jobs:
           export BRIDGE_PASSWORD="${BRIDGE_PASSWORD:-qRHKJXR0Ntieu3LmpmKKKFpP}"
           export PROMETHEUS_URL="${PROMETHEUS_URL:-}"
 
-          # Pre-materialize credentials file if GCP_SA_JSON secret is set
-          if [ -n "$GCP_SA_JSON" ]; then
-            echo "Pre-materializing GCP Service Account credentials into ./credentials/gcp-sa.json..."
-            mkdir -p credentials
-            printf "%s" "$GCP_SA_JSON" > credentials/gcp-sa.json
-            chmod 600 credentials/gcp-sa.json
-          fi
-
           # Rebuild and launch detached
           docker compose up -d --build --remove-orphans
 
-          # If container started and file wasn't mounted, also inject via docker exec
+          # If GCP Service Account JSON secret is provided, inject it securely into container
           if [ -n "$GCP_SA_JSON" ]; then
             echo "Injecting GCP Service Account credentials into container..."
-            printf "%s" "$GCP_SA_JSON" | docker exec -i stackchan-gcp-bridge sh -c 'cat > /app/credentials/gcp-sa.json 2>/dev/null || cat > /tmp/gcp-sa.json' || true
+            printf "%s" "$GCP_SA_JSON" | docker exec -i stackchan-gcp-bridge sh -c 'cat > /app/credentials/gcp-sa.json && chmod 600 /app/credentials/gcp-sa.json' || true
           fi
+
 
           # Verify container health
           sleep 4
