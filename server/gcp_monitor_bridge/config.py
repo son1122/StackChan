@@ -19,7 +19,14 @@ if _gcp_sa_json and not os.path.exists(_default_creds_path):
             _f.write(content)
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _default_creds_path
     except Exception:
-        pass
+        try:
+            _tmp_path = "/tmp/gcp-sa.json"
+            with open(_tmp_path, "w") as _f:
+                _f.write(content)
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _tmp_path
+        except Exception:
+            pass
+
 
 if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
     local_creds = os.path.join(os.path.dirname(__file__), "credentials", "gcp-sa.json")

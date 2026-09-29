@@ -45,6 +45,8 @@ jobs:
         env:
           BRIDGE_PORT: ${{ secrets.BRIDGE_PORT }}
           BRIDGE_API_KEY: ${{ secrets.BRIDGE_API_KEY }}
+          BRIDGE_USERNAME: ${{ secrets.BRIDGE_USERNAME }}
+          BRIDGE_PASSWORD: ${{ secrets.BRIDGE_PASSWORD }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_PROJECT_IDS: ${{ secrets.GCP_PROJECT_IDS }}
           GCP_SA_JSON: ${{ secrets.GCP_SA_JSON }}
@@ -65,24 +67,33 @@ jobs:
 
           # Export environment for docker compose
           export GCP_PROJECT_ID="${GCP_PROJECT_ID:-insurverse-develop}"
-          export GCP_PROJECT_IDS="${GCP_PROJECT_IDS:-insurverse-develop,insurverse-uat}"
+          export GCP_PROJECT_IDS="${GCP_PROJECT_IDS:-insurverse-develop,insurverse-uat,insurverse-app-63261,personal-453403,gen-lang-client-0923310914}"
           export GCP_SA_JSON="${GCP_SA_JSON:-}"
           export BRIDGE_API_KEY="${BRIDGE_API_KEY:-}"
           export BRIDGE_USERNAME="${BRIDGE_USERNAME:-stackchan1}"
           export BRIDGE_PASSWORD="${BRIDGE_PASSWORD:-qRHKJXR0Ntieu3LmpmKKKFpP}"
           export PROMETHEUS_URL="${PROMETHEUS_URL:-}"
 
+          # Pre-materialize credentials file if GCP_SA_JSON secret is set
+          if [ -n "$GCP_SA_JSON" ]; then
+            echo "Pre-materializing GCP Service Account credentials into ./credentials/gcp-sa.json..."
+            mkdir -p credentials
+            printf "%s" "$GCP_SA_JSON" > credentials/gcp-sa.json
+            chmod 600 credentials/gcp-sa.json
+          fi
+
           # Rebuild and launch detached
           docker compose up -d --build --remove-orphans
 
-          # If GCP Service Account JSON secret is provided, inject it securely into container
+          # If container started and file wasn't mounted, also inject via docker exec
           if [ -n "$GCP_SA_JSON" ]; then
             echo "Injecting GCP Service Account credentials into container..."
-            printf "%s" "$GCP_SA_JSON" | docker exec -i stackchan-gcp-bridge sh -c 'cat > /app/credentials/gcp-sa.json && chmod 600 /app/credentials/gcp-sa.json'
+            printf "%s" "$GCP_SA_JSON" | docker exec -i stackchan-gcp-bridge sh -c 'cat > /app/credentials/gcp-sa.json 2>/dev/null || cat > /tmp/gcp-sa.json' || true
           fi
 
           # Verify container health
           sleep 4
+
           docker ps --filter name=stackchan-gcp-bridge --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
           # Probe live healthz endpoint
