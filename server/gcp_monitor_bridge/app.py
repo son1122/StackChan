@@ -1,3 +1,4 @@
+import os
 import secrets
 import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, Security, Header, status
@@ -40,8 +41,15 @@ async def verify_authentication(
     has_api_key_configured = bool(settings.bridge_api_key)
     has_basic_configured = bool(settings.bridge_username and settings.bridge_password)
     
+    # Security: Fail closed by default unless ALLOW_ANONYMOUS is explicitly enabled
     if not has_api_key_configured and not has_basic_configured:
-        return True
+        if os.getenv("ALLOW_ANONYMOUS", "").lower() in ("true", "1", "yes"):
+            return True
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized: Bridge security credentials not configured",
+            headers={"WWW-Authenticate": "Basic realm=\"StackChan GCP Bridge\""},
+        )
 
     # 1. HTTP Basic Authentication
     if credentials:
@@ -114,7 +122,7 @@ async def get_dashboard():
     """
     return HTMLResponse(content=get_dashboard_html(), status_code=200)
 
-@app.get("/metrics")
+@app.get("/metrics", dependencies=[Depends(verify_authentication)])
 async def get_prometheus_metrics():
     """
     Prometheus metrics exporter for GCP fleet monitoring.

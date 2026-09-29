@@ -1,9 +1,11 @@
 import os
 import json
-import urllib.request
+import httpx
 import time
 import math
 import logging
+import threading
+import concurrent.futures
 from typing import Dict, Any, List, Optional
 from config import settings
 
@@ -15,13 +17,55 @@ class GCPCollector:
         self.cached_projects: Dict[str, Dict[str, Any]] = {}
         self.last_fetch_time: float = 0.0
         self._cached_creds = None
+        self._lock = threading.Lock()
+        self._refresh_lock = threading.Lock()
+        
+        # Warm initial cache immediately with fast seed so endpoints are never empty
+        self._seed_initial_cache()
+
+        # Start background polling thread so cache is updated with live data
+        self._bg_thread = threading.Thread(target=self._background_refresh_loop, daemon=True)
+        self._bg_thread.start()
+
+    def _seed_initial_cache(self):
+        """Pre-populates cache instantly so the server is immediately responsive."""
+        project_ids = settings.project_ids
+        sim_projects = [
+            self._generate_simulated_project(pid, seed_offset=float(idx * 1.5))
+            for idx, pid in enumerate(project_ids)
+        ]
+        with self._lock:
+            for p in sim_projects:
+                self.cached_projects[p["project_id"]] = p
+            self.cached_fleet = self._aggregate_fleet(sim_projects)
+            self.last_fetch_time = time.time()
 
     def _get_credentials(self):
         if self._cached_creds is not None and self._cached_creds.valid:
             return self._cached_creds
 
-        import google.auth
+        from google.oauth2 import service_account
         from google.auth.transport.requests import Request
+        import google.auth
+
+        candidate_paths = [
+            os.getenv("GOOGLE_APPLICATION_CREDENTIALS", ""),
+            "/app/credentials/gcp-sa.json",
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "credentials", "gcp-sa.json")
+        ]
+
+        for path in candidate_paths:
+            if path and os.path.exists(path):
+                try:
+                    creds = service_account.Credentials.from_service_account_file(
+                        path, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+                    )
+                    if not creds.valid:
+                        creds.refresh(Request())
+                    self._cached_creds = creds
+                    return creds
+                except Exception as e:
+                    logger.warning(f"Failed to load service account from {path}: {e}")
 
         creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
         if not creds.valid:
@@ -55,21 +99,46 @@ class GCPCollector:
 
         def _get_api(url: str, timeout: float = 6.0) -> Optional[Dict[str, Any]]:
             try:
-                req = urllib.request.Request(url, headers=headers)
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    return json.loads(resp.read().decode())
+                resp = httpx.get(url, headers=headers, timeout=timeout)
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.debug(f"API query non-200 ({resp.status_code}) for {url}")
+                return None
             except Exception as ex:
                 logger.debug(f"API query error for {url}: {ex}")
                 return None
 
-        # 1. Compute Engine instances
-        vm_data = _get_api(f"https://compute.googleapis.com/compute/v1/projects/{project_id}/aggregated/instances") or {}
+        # 1-6. Fetch Compute, GKE, SQL, Run, BigQuery, and Monitoring in PARALLEL
+        now = time.time()
+        end_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+        start_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - 600))
+        cpu_url = (
+            f"https://monitoring.googleapis.com/v3/projects/{project_id}/timeSeries"
+            f"?filter=metric.type%3D%22compute.googleapis.com%2Finstance%2Fcpu%2Futilization%22"
+            f"&interval.startTime={start_time}&interval.endTime={end_time}"
+        )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+            fut_vm = executor.submit(_get_api, f"https://compute.googleapis.com/compute/v1/projects/{project_id}/aggregated/instances")
+            fut_gke = executor.submit(_get_api, f"https://container.googleapis.com/v1/projects/{project_id}/locations/-/clusters")
+            fut_sql = executor.submit(_get_api, f"https://sqladmin.googleapis.com/v1/projects/{project_id}/instances")
+            fut_run = executor.submit(_get_api, f"https://run.googleapis.com/v2/projects/{project_id}/locations/-/services")
+            fut_bq = executor.submit(_get_api, f"https://bigquery.googleapis.com/bigquery/v2/projects/{project_id}/datasets")
+            fut_cpu = executor.submit(_get_api, cpu_url)
+
+            vm_data = fut_vm.result() or {}
+            gke_data = fut_gke.result() or {}
+            sql_data = fut_sql.result() or {}
+            run_data = fut_run.result() or {}
+            bq_data = fut_bq.result() or {}
+            cpu_data = fut_cpu.result() or {}
+
+        # 1. Parse VMs
         vms = [inst for zone in vm_data.get("items", {}).values() for inst in zone.get("instances", [])]
         vms_running = sum(1 for v in vms if v.get("status") == "RUNNING")
         vms_total = len(vms)
 
-        # 2. GKE Clusters
-        gke_data = _get_api(f"https://container.googleapis.com/v1/projects/{project_id}/locations/-/clusters") or {}
+        # 2. Parse GKE
         clusters = gke_data.get("clusters", [])
         nodes_count = sum(c.get("currentNodeCount", 0) for c in clusters)
         gke_status = "ok"
@@ -77,30 +146,17 @@ class GCPCollector:
             if c.get("status") not in ("RUNNING", "RECONCILING"):
                 gke_status = "warning"
 
-        # 3. Cloud SQL
-        sql_data = _get_api(f"https://sqladmin.googleapis.com/v1/projects/{project_id}/instances") or {}
+        # 3. Parse Cloud SQL
         sql_instances = sql_data.get("items", [])
         sql_up = sum(1 for s in sql_instances if s.get("state") == "RUNNABLE")
 
-        # 4. Cloud Run
-        run_data = _get_api(f"https://run.googleapis.com/v2/projects/{project_id}/locations/-/services") or {}
+        # 4. Parse Cloud Run
         run_services = len(run_data.get("services", []))
 
-        # 5. BigQuery
-        bq_data = _get_api(f"https://bigquery.googleapis.com/bigquery/v2/projects/{project_id}/datasets") or {}
+        # 5. Parse BigQuery
         bq_datasets = len(bq_data.get("datasets", []))
 
-        # 6. Cloud Monitoring CPU Metrics
-        now = time.time()
-        end_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
-        start_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - 600))
-
-        cpu_url = (
-            f"https://monitoring.googleapis.com/v3/projects/{project_id}/timeSeries"
-            f"?filter=metric.type%3D%22compute.googleapis.com%2Finstance%2Fcpu%2Futilization%22"
-            f"&interval.startTime={start_time}&interval.endTime={end_time}"
-        )
-        cpu_data = _get_api(cpu_url) or {}
+        # 6. Parse CPU metrics
         cpus = []
         for ts in cpu_data.get("timeSeries", []):
             pts = ts.get("points", [])
@@ -361,38 +417,63 @@ class GCPCollector:
             "projects_summary": projects_summary
         }
 
+    def _background_refresh_loop(self):
+        """
+        Background loop refreshing telemetry periodically so get_telemetry()
+        never blocks incoming API or HTTP requests.
+        """
+        time.sleep(1.0)
+        while True:
+            try:
+                self.refresh()
+            except Exception as e:
+                logger.error(f"Error in background GCP telemetry refresh: {e}")
+            time.sleep(max(5, settings.cache_ttl_seconds))
+
     def refresh(self):
-        project_ids = settings.project_ids
-        project_telemetries: List[Dict[str, Any]] = []
+        if not self._refresh_lock.acquire(blocking=False):
+            return
 
-        for idx, pid in enumerate(project_ids):
-            p_data = None
-            if self._has_credentials() and not pid.startswith("demo-"):
-                try:
-                    logger.info(f"Fetching real live GCP telemetry for project: {pid}")
-                    p_data = self._fetch_live_project(pid)
-                    logger.info(f"Successfully collected real GCP telemetry for {pid}")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch live GCP telemetry for {pid}: {e}. Falling back to simulation.")
-            
-            if not p_data:
-                p_data = self._generate_simulated_project(pid, seed_offset=float(idx * 1.5))
+        try:
+            project_ids = settings.project_ids
 
-            self.cached_projects[pid] = p_data
-            project_telemetries.append(p_data)
+            def _fetch_single_project(item):
+                idx, pid = item
+                p_data = None
+                if self._has_credentials() and not pid.startswith("demo-"):
+                    try:
+                        logger.info(f"Fetching real live GCP telemetry for project: {pid}")
+                        p_data = self._fetch_live_project(pid)
+                        logger.info(f"Successfully collected real GCP telemetry for {pid}")
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch live GCP telemetry for {pid}: {e}. Falling back to simulation.")
+                
+                if not p_data:
+                    p_data = self._generate_simulated_project(pid, seed_offset=float(idx * 1.5))
+                return pid, p_data
 
-        self.cached_fleet = self._aggregate_fleet(project_telemetries)
-        self.last_fetch_time = time.time()
+            max_workers = min(max(len(project_ids), 1), 4)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                results = list(executor.map(_fetch_single_project, enumerate(project_ids)))
+
+            project_telemetries = [p_data for _, p_data in results]
+            fleet_data = self._aggregate_fleet(project_telemetries)
+
+            with self._lock:
+                for pid, p_data in results:
+                    self.cached_projects[pid] = p_data
+                self.cached_fleet = fleet_data
+                self.last_fetch_time = time.time()
+        finally:
+            self._refresh_lock.release()
 
     def get_telemetry(self, project_id: Optional[str] = None) -> Dict[str, Any]:
-        now = time.time()
-        if not self.cached_fleet or (now - self.last_fetch_time >= settings.cache_ttl_seconds):
-            self.refresh()
-
-        if project_id and project_id in self.cached_projects:
-            return self.cached_projects[project_id]
-
-        return self.cached_fleet
+        with self._lock:
+            if not self.cached_fleet:
+                self.refresh()
+            if project_id and project_id in self.cached_projects:
+                return self.cached_projects[project_id]
+            return self.cached_fleet
 
     def get_projects_list(self) -> List[Dict[str, Any]]:
         fleet = self.get_telemetry()

@@ -552,9 +552,9 @@ def get_dashboard_html() -> str:
             <div class="metrics-panel">
                 <!-- Project Tabs -->
                 <div class="tabs-row" id="tabs-container">
-                    <button class="tab-btn active" onclick="switchProject('')">ALL FLEET</button>
-                    <button class="tab-btn" onclick="switchProject('insurverse-develop')">insurverse-develop</button>
-                    <button class="tab-btn" onclick="switchProject('insurverse-uat')">insurverse-uat</button>
+                    <button class="tab-btn active" onclick="switchProject(event, '')">ALL FLEET</button>
+                    <button class="tab-btn" onclick="switchProject(event, 'insurverse-develop')">insurverse-develop</button>
+                    <button class="tab-btn" onclick="switchProject(event, 'insurverse-uat')">insurverse-uat</button>
                 </div>
 
                 <!-- 6 Metric Cards -->
@@ -677,12 +677,15 @@ def get_dashboard_html() -> str:
     <script>
         let currentProject = '';
         let lastLiveTelemetry = null;
+        let lastLatencyMs = 0;
         let isManualOverride = false;
 
         async function fetchTelemetry(projectId = '') {
             try {
                 const url = projectId ? `/api/v1/gcp/status?project=${encodeURIComponent(projectId)}` : '/api/v1/gcp/status';
+                const t0 = performance.now();
                 const resp = await fetch(url);
+                lastLatencyMs = Math.round(performance.now() - t0);
                 if (resp.status === 401) {
                     console.warn("Unauthorized on bridge API");
                     return null;
@@ -693,6 +696,23 @@ def get_dashboard_html() -> str:
             } catch (err) {
                 console.error("Telemetry fetch failed:", err);
                 return null;
+            }
+        }
+
+        function updateTabs(projectsSummary, activePid) {
+            const container = document.getElementById('tabs-container');
+            if (!container || !projectsSummary || projectsSummary.length === 0) return;
+
+            // Only rebuild tabs if project list changed or not built
+            const currentTabBtns = container.querySelectorAll('.tab-btn');
+            if (currentTabBtns.length !== projectsSummary.length + 1) {
+                let html = `<button class="tab-btn ${!activePid ? 'active' : ''}" onclick="switchProject(event, '')">ALL FLEET</button>`;
+                for (const p of projectsSummary) {
+                    const pid = p.project_id || '';
+                    const isActive = (activePid === pid) ? 'active' : '';
+                    html += `<button class="tab-btn ${isActive}" onclick="switchProject(event, '${pid}')">${pid}</button>`;
+                }
+                container.innerHTML = html;
             }
         }
 
@@ -719,6 +739,11 @@ def get_dashboard_html() -> str:
                 badge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
                 badge.style.background = 'rgba(239, 68, 68, 0.1)';
                 badgeText.innerText = (data.project_id || 'FLEET') + ' INCIDENT';
+            }
+
+            // Sync dynamic tabs if summary available
+            if (data.projects_summary) {
+                updateTabs(data.projects_summary, currentProject);
             }
 
             // Cards
@@ -762,7 +787,7 @@ def get_dashboard_html() -> str:
                 }
             }
 
-            document.getElementById('sync-timer').innerText = 'Last poll: ' + new Date().toLocaleTimeString();
+            document.getElementById('sync-timer').innerHTML = 'Last poll: ' + new Date().toLocaleTimeString() + ' &bull; <span style="color:#38bdf8;font-weight:600;">⚡ ' + lastLatencyMs + 'ms</span>';
         }
 
         function setMood(mood, text) {
@@ -789,13 +814,15 @@ def get_dashboard_html() -> str:
             }, 300);
         }
 
-        async function switchProject(pid) {
+        async function switchProject(evt, pid) {
             currentProject = pid;
             isManualOverride = false;
 
             const tabs = document.querySelectorAll('.tab-btn');
             tabs.forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
+            if (evt && evt.currentTarget) {
+                evt.currentTarget.classList.add('active');
+            }
 
             const data = await fetchTelemetry(pid);
             renderData(data);
