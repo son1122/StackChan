@@ -16,6 +16,7 @@ services:
       - BRIDGE_PASSWORD=${BRIDGE_PASSWORD}
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcp-sa.json
       - PROMETHEUS_URL=${PROMETHEUS_URL:-}
+      - SKIP_AUTH_FOR_UI=${SKIP_AUTH_FOR_UI:-true}
 
 volumes:
   robot-data:

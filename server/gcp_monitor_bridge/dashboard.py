@@ -1138,7 +1138,9 @@ def get_dashboard_html() -> str:
             try {
                 const url = projectId ? `/api/v1/gcp/status?project=${encodeURIComponent(projectId)}` : '/api/v1/gcp/status';
                 const t0 = performance.now();
-                const resp = await fetch(url);
+                const resp = await fetch(url, {
+                    headers: { 'X-Requested-With': 'StackChan-UI' }
+                });
                 lastLatencyMs = Math.round(performance.now() - t0);
                 if (resp.status === 401) {
                     console.warn("Unauthorized on bridge API");
@@ -1298,7 +1300,9 @@ def get_dashboard_html() -> str:
 
         async function fetchRobots() {
             try {
-                const resp = await fetch('/api/v1/gcp/robots');
+                const resp = await fetch('/api/v1/gcp/robots', {
+                    headers: { 'X-Requested-With': 'StackChan-UI' }
+                });
                 if (resp.status === 200) {
                     const data = await resp.json();
                     if (data.projects && Array.isArray(data.projects)) {
@@ -1460,7 +1464,10 @@ def get_dashboard_html() -> str:
             try {
                 const resp = await fetch(`/api/v1/gcp/robots/${encodeURIComponent(mac)}/config`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'StackChan-UI'
+                    },
                     body: JSON.stringify(payload)
                 });
 
@@ -1488,7 +1495,10 @@ def get_dashboard_html() -> str:
 
             try {
                 const resp = await fetch(`/api/v1/gcp/robots/${encodeURIComponent(mac)}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: {
+                        'X-Requested-With': 'StackChan-UI'
+                    }
                 });
                 if (resp.ok) {
                     showToast(`🗑️ StackChan (${mac}) removed`);

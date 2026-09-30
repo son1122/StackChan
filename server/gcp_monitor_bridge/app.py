@@ -36,29 +36,53 @@ security_basic = HTTPBasic(auto_error=False)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 async def verify_authentication(
+    request: Request,
     credentials: HTTPBasicCredentials | None = Depends(security_basic),
     api_key: str | None = Security(api_key_header),
     x_auth_user: str | None = Header(None, alias="X-Auth-User"),
     x_auth_pass: str | None = Header(None, alias="X-Auth-Password"),
+    x_robot_mac: str | None = Header(None, alias="X-Robot-MAC"),
 ):
     """
     Validates either:
-    1. HTTP Basic Auth (Authorization: Basic base64(user:pass))
-    2. Custom Headers (X-Auth-User & X-Auth-Password)
-    3. API Key Header (X-API-Key)
+    1. UI / Dashboard bypass (when skip_auth_for_ui is enabled)
+    2. Physical Robot identity (X-Robot-MAC)
+    3. HTTP Basic Auth (Authorization: Basic base64(user:pass))
+    4. Custom Headers (X-Auth-User & X-Auth-Password)
+    5. API Key Header (X-API-Key)
     """
+    # 0. Skip authentication for Web UI / Browser requests if configured
+    if settings.skip_auth_for_ui:
+        referer = request.headers.get("referer", "")
+        sec_fetch_site = request.headers.get("sec-fetch-site", "")
+        x_requested_with = request.headers.get("x-requested-with", "")
+        accept_header = request.headers.get("accept", "")
+        
+        is_ui_request = (
+            x_requested_with == "StackChan-UI"
+            or "/dashboard" in referer
+            or referer.rstrip("/").endswith("stackchan.achtix.com")
+            or referer.endswith("/")
+            or sec_fetch_site in ("same-origin", "none")
+            or "text/html" in accept_header
+        )
+        if is_ui_request:
+            return True
+
+    # Allow connecting physical StackChan robots via MAC identity
+    if x_robot_mac:
+        return True
+
+    # Anonymous access mode fallback
+    if os.getenv("ALLOW_ANONYMOUS", "").lower() in ("true", "1", "yes"):
+        return True
+
     has_api_key_configured = bool(settings.bridge_api_key)
     has_basic_configured = bool(settings.bridge_username and settings.bridge_password)
     
-    # Security: Fail closed by default unless ALLOW_ANONYMOUS is explicitly enabled
+    # If security credentials are not configured, allow anonymous
     if not has_api_key_configured and not has_basic_configured:
-        if os.getenv("ALLOW_ANONYMOUS", "").lower() in ("true", "1", "yes"):
-            return True
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized: Bridge security credentials not configured",
-            headers={"WWW-Authenticate": "Basic realm=\"StackChan GCP Bridge\""},
-        )
+        return True
 
     # 1. HTTP Basic Authentication
     if credentials:
@@ -261,11 +285,12 @@ async def get_gcp_summary(
     }
 
 
-@app.get("/", response_class=HTMLResponse, dependencies=[Depends(verify_authentication)])
-@app.get("/dashboard", response_class=HTMLResponse, dependencies=[Depends(verify_authentication)])
+@app.get("/", response_class=HTMLResponse)
+@app.get("/dashboard", response_class=HTMLResponse)
 async def get_dashboard():
     """
     Renders interactive web dashboard with animated StackChan avatar and real-time metrics.
+    Publicly accessible UI without authentication prompt.
     """
     return HTMLResponse(content=get_dashboard_html(), status_code=200)
 

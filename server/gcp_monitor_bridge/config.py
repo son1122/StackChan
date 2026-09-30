@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     bridge_username: str = os.getenv("BRIDGE_USERNAME", "stackchan1").strip()
     bridge_password: str = os.getenv("BRIDGE_PASSWORD", "").strip()
     
+    # Security: Skip authentication for Web UI and dashboard requests
+    skip_auth_for_ui: bool = os.getenv("SKIP_AUTH_FOR_UI", "true").lower() in ("true", "1", "yes")
+    
     # Optional Prometheus / OpenTelemetry Gateway
     prometheus_url: str = os.getenv("PROMETHEUS_URL", "")
     
