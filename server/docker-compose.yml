@@ -49,7 +49,7 @@ services:
       - GCP_SA_JSON=${GCP_SA_JSON:-}
       - BRIDGE_API_KEY=${BRIDGE_API_KEY:-}
       - BRIDGE_USERNAME=${BRIDGE_USERNAME:-stackchan1}
-      - BRIDGE_PASSWORD=${BRIDGE_PASSWORD:-changeme123}
+      - BRIDGE_PASSWORD=${BRIDGE_PASSWORD:-cSv7jSvtg1jBn53obBWZEuyI}
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcp-sa.json
       - PROMETHEUS_URL=${PROMETHEUS_URL:-}
 

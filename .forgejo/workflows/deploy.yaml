@@ -71,7 +71,7 @@ jobs:
           export GCP_SA_JSON="${GCP_SA_JSON:-}"
           export BRIDGE_API_KEY="${BRIDGE_API_KEY:-}"
           export BRIDGE_USERNAME="${BRIDGE_USERNAME:-stackchan1}"
-          export BRIDGE_PASSWORD="${BRIDGE_PASSWORD:-qRHKJXR0Ntieu3LmpmKKKFpP}"
+          export BRIDGE_PASSWORD="${BRIDGE_PASSWORD:-cSv7jSvtg1jBn53obBWZEuyI}"
           export PROMETHEUS_URL="${PROMETHEUS_URL:-}"
 
           # Rebuild and launch detached
