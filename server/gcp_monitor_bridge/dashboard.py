@@ -522,23 +522,30 @@ def get_dashboard_html() -> str:
 
         .robots-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+            gap: 12px;
         }
 
         .robot-card {
             background: #0f172a;
-            border-radius: 8px;
-            padding: 10px 14px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 12px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            transition: border-color 0.2s;
+            flex-direction: column;
+            gap: 10px;
+            transition: all 0.2s ease;
         }
 
         .robot-card:hover {
-            border-color: rgba(56, 189, 248, 0.4);
+            border-color: rgba(56, 189, 248, 0.5);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .robot-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
 
         .robot-card-left {
@@ -548,11 +555,12 @@ def get_dashboard_html() -> str:
         }
 
         .robot-status-dot {
-            width: 8px;
-            height: 8px;
+            width: 9px;
+            height: 9px;
             border-radius: 50%;
             background: #22c55e;
             box-shadow: 0 0 8px #22c55e;
+            flex-shrink: 0;
         }
 
         .robot-status-dot.offline {
@@ -560,46 +568,287 @@ def get_dashboard_html() -> str:
             box-shadow: none;
         }
 
+        .robot-name {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
         .robot-mac {
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            font-size: 0.82rem;
-            color: #f8fafc;
-            font-weight: 600;
+            font-size: 0.72rem;
+            color: var(--text-dim);
         }
 
         .robot-meta {
-            font-size: 0.72rem;
+            font-size: 0.7rem;
             color: var(--text-dim);
-            margin-top: 2px;
-        }
-
-        .robot-card-right {
-            text-align: right;
+            margin-top: 1px;
         }
 
         .robot-target-badge {
-            background: rgba(56, 189, 248, 0.1);
+            background: rgba(56, 189, 248, 0.15);
             color: #38bdf8;
-            font-size: 0.7rem;
-            padding: 2px 6px;
-            border-radius: 4px;
-            display: inline-block;
-            margin-bottom: 3px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        }
-
-        .robot-battery {
             font-size: 0.75rem;
             font-weight: 600;
-            color: #22c55e;
+            padding: 3px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            display: inline-block;
+        }
+
+        .robot-features-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.72rem;
+            color: var(--text-dim);
+        }
+
+        .feature-pills {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .feature-pill {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.68rem;
+        }
+
+        .feature-pill.active {
+            background: rgba(34, 197, 94, 0.1);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        .btn-configure {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-configure:hover {
+            background: rgba(56, 189, 248, 0.3);
+            color: #fff;
         }
 
         .robot-empty {
             color: var(--text-dim);
             font-size: 0.8rem;
             font-style: italic;
-            padding: 6px 0;
+            padding: 12px 0;
+            text-align: center;
+            grid-column: 1 / -1;
         }
+
+        /* Modal Dialog Styling */
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(6px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-backdrop.active {
+            display: flex;
+        }
+
+        .modal-box {
+            background: #131b2e;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 16px;
+            max-width: 480px;
+            width: 90%;
+            padding: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            animation: modalPop 0.2s ease-out;
+        }
+
+        @keyframes modalPop {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 12px;
+        }
+
+        .modal-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .modal-close:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+
+        .form-input, .form-select {
+            background: #090d16;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #f8fafc;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus, .form-select:focus {
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+        }
+
+        .switch-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .switch-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .switch-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+
+        .switch-desc {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #334155;
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #22c55e;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .toast-msg {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #0f172a;
+            border: 1px solid #22c55e;
+            color: #f8fafc;
+            padding: 12px 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            font-size: 0.85rem;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 2000;
+        }
+
 
         footer {
             margin-top: auto;
@@ -772,8 +1021,11 @@ def get_dashboard_html() -> str:
                 <!-- Connected Robots Fleet Panel -->
                 <div class="robots-panel" id="robots-panel">
                     <div class="robots-header">
-                        <span class="robots-title">🤖 Active Connected StackChans</span>
-                        <span class="robots-count-badge" id="robots-count">0 Online</span>
+                        <span class="robots-title">🤖 Connected StackChan Fleet (Multi-Robot Routing)</span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="robots-count-badge" id="robots-count">0 Online</span>
+                            <button class="btn-configure" onclick="openAddRobotModal()" style="font-size:0.75rem; padding:4px 10px;">+ Pre-Register</button>
+                        </div>
                     </div>
                     <div class="robots-grid" id="robots-container">
                         <div class="robot-empty">No physical StackChan currently reporting. Polling...</div>
@@ -793,10 +1045,88 @@ def get_dashboard_html() -> str:
             </div>
         </div>
 
+        <!-- Robot Configuration Modal Dialog -->
+        <div class="modal-backdrop" id="robot-modal" onclick="if(event.target===this) closeModal()">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <span class="modal-title" id="modal-title">⚙️ Configure StackChan</span>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Robot MAC Address</label>
+                    <input type="text" id="cfg-mac" class="form-input" style="font-family:ui-monospace; font-weight:600;" placeholder="44:1B:F6:E5:59:60">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Robot Nickname / Desk Location</label>
+                    <input type="text" id="cfg-name" class="form-input" placeholder="e.g. Bangkok Dev Desk">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Assigned GCP Project (Routing Target)</label>
+                    <select id="cfg-project" class="form-select"></select>
+                </div>
+
+                <div class="switch-row">
+                    <div class="switch-text">
+                        <span class="switch-title">🔔 Audible Incident Chimes</span>
+                        <span class="switch-desc">Play tone on physical speaker when alert triggers</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="cfg-sound">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="switch-row">
+                    <div class="switch-text">
+                        <span class="switch-title">💳 Display Cloud Costs on Screen</span>
+                        <span class="switch-desc">Show monthly GCP spending on robot LCD</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="cfg-billing">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Screen Display Mode</label>
+                    <select id="cfg-mode" class="form-select">
+                        <option value="standard">Standard Multi-Card</option>
+                        <option value="ticker">1-Line Ticker Focus</option>
+                        <option value="avatar_only">Ambient Avatar Only</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Telemetry Refresh Interval</label>
+                    <select id="cfg-interval" class="form-select">
+                        <option value="10">10 Seconds (Fast)</option>
+                        <option value="15">15 Seconds (Standard)</option>
+                        <option value="30">30 Seconds</option>
+                        <option value="60">60 Seconds (Low Power)</option>
+                    </select>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn btn-crit" id="btn-delete-robot" onclick="deleteRobotConfig()" style="font-size:0.8rem; padding:8px 14px;">Delete Robot</button>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-outline" onclick="closeModal()" style="font-size:0.8rem; padding:8px 14px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#fff; border-radius:8px; cursor:pointer;">Cancel</button>
+                        <button class="btn btn-ok" onclick="saveRobotConfig()" style="font-size:0.8rem; padding:8px 18px;">Save Settings</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification Toast -->
+        <div class="toast-msg" id="toast-msg"></div>
+
         <footer>
             StackChan GCP Monitor Bridge • Built with FastAPI & LVGL on ESP32-S3
         </footer>
     </div>
+
 
     <script>
         let currentProject = '';
@@ -952,12 +1282,30 @@ def get_dashboard_html() -> str:
             renderData(data);
         }
 
+        let availableProjects = ["ALL FLEET"];
+        let robotsCache = [];
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast-msg');
+            if (!toast) return;
+            toast.innerText = msg;
+            toast.style.borderColor = isError ? '#ef4444' : '#22c55e';
+            toast.style.display = 'flex';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3500);
+        }
+
         async function fetchRobots() {
             try {
                 const resp = await fetch('/api/v1/gcp/robots');
                 if (resp.status === 200) {
                     const data = await resp.json();
-                    renderRobots(data.robots || []);
+                    if (data.projects && Array.isArray(data.projects)) {
+                        availableProjects = data.projects;
+                    }
+                    robotsCache = data.robots || [];
+                    renderRobots(robotsCache);
                 }
             } catch (e) {
                 console.error("Robots fetch failed:", e);
@@ -970,37 +1318,189 @@ def get_dashboard_html() -> str:
             if (!container || !countBadge) return;
 
             const onlineCount = robots.filter(r => r.online).length;
-            countBadge.innerText = `${onlineCount} Online`;
+            countBadge.innerText = `${onlineCount} Online / ${robots.length} Registered`;
 
             if (robots.length === 0) {
-                container.innerHTML = '<div class="robot-empty">No physical StackChan currently reporting. Polling...</div>';
+                container.innerHTML = `
+                    <div class="robot-empty">
+                        No StackChan registered yet. Connect a physical robot or click <strong>+ Pre-Register</strong> above.
+                    </div>`;
                 return;
             }
 
             let html = '';
             for (const r of robots) {
                 const isOnline = r.online;
-                const battStr = (r.battery !== null) ? `${r.charging ? '⚡' : '🔋'} ${r.battery}%` : '⚡ DC Power';
+                const battStr = (r.battery !== null && r.battery !== undefined) ? `${r.charging ? '⚡' : '🔋'} ${r.battery}%` : '⚡ DC Power';
                 const dotClass = isOnline ? 'robot-status-dot' : 'robot-status-dot offline';
-                const timeText = (r.last_seen_sec_ago < 5) ? 'Just now' : `${r.last_seen_sec_ago}s ago`;
+                const timeText = (r.last_seen_sec_ago < 5) ? 'Just now' : (r.last_seen_sec_ago > 86400 ? 'Never' : `${r.last_seen_sec_ago}s ago`);
+                const assignedProj = r.assigned_project || "ALL FLEET";
+                const robotName = r.name || `StackChan-${r.mac.slice(-4)}`;
 
                 html += `
                     <div class="robot-card">
-                        <div class="robot-card-left">
-                            <div class="${dotClass}"></div>
-                            <div>
-                                <div class="robot-mac">${r.mac}</div>
-                                <div class="robot-meta">${r.ip} • ${timeText}</div>
+                        <div class="robot-card-top">
+                            <div class="robot-card-left">
+                                <div class="${dotClass}" title="${isOnline ? 'Online' : 'Offline'}"></div>
+                                <div>
+                                    <div class="robot-name">${robotName}</div>
+                                    <div class="robot-mac">${r.mac}</div>
+                                    <div class="robot-meta">${r.ip} • Last seen: ${timeText}</div>
+                                </div>
+                            </div>
+                            <div style="text-align:right;">
+                                <span class="robot-target-badge" title="GCP Project Route">${assignedProj}</span>
+                                <div class="robot-battery" style="color: ${isOnline ? '#22c55e' : '#64748b'};">${battStr}</div>
                             </div>
                         </div>
-                        <div class="robot-card-right">
-                            <span class="robot-target-badge">${r.project}</span>
-                            <div class="robot-battery" style="color: ${isOnline ? '#22c55e' : '#64748b'};">${battStr}</div>
+
+                        <div class="robot-features-row">
+                            <div class="feature-pills">
+                                <span class="feature-pill ${r.sound_alerts ? 'active' : ''}" title="Chime Audio Alerts">
+                                    ${r.sound_alerts ? '🔔 Chime On' : '🔕 Chime Muted'}
+                                </span>
+                                <span class="feature-pill ${r.show_billing ? 'active' : ''}" title="Display Cloud Spending on LCD">
+                                    ${r.show_billing ? '💳 Cost Shown' : '🙈 Cost Hidden'}
+                                </span>
+                                <span class="feature-pill" title="Screen Display Mode">
+                                    📺 ${r.display_mode || 'standard'}
+                                </span>
+                                <span class="feature-pill" title="Poll Rate">
+                                    ⏱️ ${r.poll_interval_sec || 15}s
+                                </span>
+                            </div>
+                            <button class="btn-configure" onclick="openRobotConfigModal('${r.mac}')">
+                                ⚙️ Configure
+                            </button>
                         </div>
                     </div>
                 `;
             }
             container.innerHTML = html;
+        }
+
+        function populateProjectDropdown(selectedProject) {
+            const select = document.getElementById('cfg-project');
+            if (!select) return;
+            select.innerHTML = '';
+            for (const p of availableProjects) {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.innerText = (p === 'ALL FLEET') ? '🌐 ALL FLEET (Full Cluster)' : `☁️ ${p}`;
+                if (p === selectedProject) opt.selected = true;
+                select.appendChild(opt);
+            }
+        }
+
+        function openRobotConfigModal(mac) {
+            const robot = robotsCache.find(r => r.mac.toUpperCase() === mac.toUpperCase()) || {
+                mac: mac,
+                name: `StackChan-${mac.slice(-4)}`,
+                assigned_project: "ALL FLEET",
+                sound_alerts: true,
+                show_billing: true,
+                display_mode: "standard",
+                poll_interval_sec: 15
+            };
+
+            document.getElementById('modal-title').innerText = `⚙️ Configure ${robot.name}`;
+            const macInput = document.getElementById('cfg-mac');
+            macInput.value = robot.mac;
+            macInput.disabled = true;
+
+            document.getElementById('cfg-name').value = robot.name || '';
+            populateProjectDropdown(robot.assigned_project || 'ALL FLEET');
+            document.getElementById('cfg-sound').checked = (robot.sound_alerts !== false);
+            document.getElementById('cfg-billing').checked = (robot.show_billing !== false);
+            document.getElementById('cfg-mode').value = robot.display_mode || 'standard';
+            document.getElementById('cfg-interval').value = String(robot.poll_interval_sec || 15);
+
+            document.getElementById('btn-delete-robot').style.display = 'block';
+            document.getElementById('robot-modal').classList.add('active');
+        }
+
+        function openAddRobotModal() {
+            document.getElementById('modal-title').innerText = `➕ Pre-Register StackChan`;
+            const macInput = document.getElementById('cfg-mac');
+            macInput.value = '';
+            macInput.disabled = false;
+            macInput.placeholder = 'e.g. 44:1B:F6:E5:59:60';
+
+            document.getElementById('cfg-name').value = 'Office StackChan';
+            populateProjectDropdown('ALL FLEET');
+            document.getElementById('cfg-sound').checked = true;
+            document.getElementById('cfg-billing').checked = true;
+            document.getElementById('cfg-mode').value = 'standard';
+            document.getElementById('cfg-interval').value = '15';
+
+            document.getElementById('btn-delete-robot').style.display = 'none';
+            document.getElementById('robot-modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('robot-modal').classList.remove('active');
+        }
+
+        async function saveRobotConfig() {
+            const mac = document.getElementById('cfg-mac').value.trim().toUpperCase();
+            if (!mac) {
+                alert("MAC Address is required");
+                return;
+            }
+
+            const payload = {
+                name: document.getElementById('cfg-name').value.trim() || undefined,
+                assigned_project: document.getElementById('cfg-project').value,
+                sound_alerts: document.getElementById('cfg-sound').checked,
+                show_billing: document.getElementById('cfg-billing').checked,
+                display_mode: document.getElementById('cfg-mode').value,
+                poll_interval_sec: parseInt(document.getElementById('cfg-interval').value, 10)
+            };
+
+            try {
+                const resp = await fetch(`/api/v1/gcp/robots/${encodeURIComponent(mac)}/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (resp.ok) {
+                    showToast(`✅ Settings saved for ${payload.name || mac}`);
+                    closeModal();
+                    await fetchRobots();
+                } else {
+                    const err = await resp.json();
+                    showToast(`❌ Error: ${err.detail || 'Failed to update'}`, true);
+                }
+            } catch (e) {
+                console.error("Save config error:", e);
+                showToast("❌ Network error saving configuration", true);
+            }
+        }
+
+        async function deleteRobotConfig() {
+            const mac = document.getElementById('cfg-mac').value.trim().toUpperCase();
+            if (!mac) return;
+
+            if (!confirm(`Are you sure you want to remove StackChan (${mac}) from the registry?`)) {
+                return;
+            }
+
+            try {
+                const resp = await fetch(`/api/v1/gcp/robots/${encodeURIComponent(mac)}`, {
+                    method: 'DELETE'
+                });
+                if (resp.ok) {
+                    showToast(`🗑️ StackChan (${mac}) removed`);
+                    closeModal();
+                    await fetchRobots();
+                } else {
+                    showToast("❌ Error deleting robot", true);
+                }
+            } catch (e) {
+                console.error("Delete robot error:", e);
+                showToast("❌ Network error deleting robot", true);
+            }
         }
 
         async function loadLiveTelemetry() {
@@ -1021,6 +1521,7 @@ def get_dashboard_html() -> str:
 
         // Initial Load
         loadLiveTelemetry();
+
     </script>
 </body>
 </html>

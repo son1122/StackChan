@@ -5,6 +5,7 @@ import logging
 import threading
 from typing import Dict, Any, List, Optional
 import uvicorn
+from pydantic import BaseModel, Field
 from fastapi import FastAPI, Depends, HTTPException, Security, Header, Request, status
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,8 +13,10 @@ from fastapi.security import APIKeyHeader, HTTPBasic, HTTPBasicCredentials
 from collectors.gcp_collector import collector
 from config import settings
 from dashboard import get_dashboard_html
+from robot_store import robot_store
 
 logger = logging.getLogger("gcp_bridge")
+
 
 app = FastAPI(
     title="StackChan GCP Monitor Bridge",
@@ -81,55 +84,13 @@ async def verify_authentication(
         headers={"WWW-Authenticate": "Basic realm=\"StackChan GCP Bridge\""},
     )
 
-class RobotRegistry:
-    def __init__(self):
-        self._robots: Dict[str, Dict[str, Any]] = {}
-        self._lock = threading.Lock()
-
-    def record_heartbeat(
-        self,
-        mac: str,
-        ip: str,
-        project: Optional[str] = None,
-        battery: Optional[str] = None,
-        charging: Optional[str] = None,
-        version: Optional[str] = None
-    ):
-        if not mac:
-            return
-        now = time.time()
-        batt_val = None
-        if battery is not None and str(battery).isdigit():
-            batt_val = max(0, min(100, int(battery)))
-
-        is_charging = charging in ("1", "true", "True", True)
-
-        with self._lock:
-            self._robots[mac] = {
-                "mac": mac,
-                "ip": ip,
-                "project": project or "ALL FLEET",
-                "battery": batt_val,
-                "charging": is_charging,
-                "version": version or "1.0.0",
-                "last_seen": now,
-            }
-
-    def get_robots(self) -> List[Dict[str, Any]]:
-        now = time.time()
-        result = []
-        with self._lock:
-            for mac, r in self._robots.items():
-                sec_ago = int(now - r["last_seen"])
-                is_online = sec_ago < 60
-                result.append({
-                    **r,
-                    "online": is_online,
-                    "last_seen_sec_ago": sec_ago
-                })
-        return sorted(result, key=lambda x: x["last_seen"], reverse=True)
-
-robot_registry = RobotRegistry()
+class RobotConfigPayload(BaseModel):
+    name: Optional[str] = Field(None, max_length=50)
+    assigned_project: Optional[str] = None
+    sound_alerts: Optional[bool] = None
+    show_billing: Optional[bool] = None
+    poll_interval_sec: Optional[int] = Field(None, ge=5, le=300)
+    display_mode: Optional[str] = Field(None, pattern="^(standard|ticker|avatar_only)$")
 
 @app.get("/healthz")
 async def health_check():
@@ -148,26 +109,85 @@ async def get_gcp_status(
     """
     Primary endpoint for StackChan ESP32-S3.
     Returns compact, high-efficiency JSON summary of GCP services (Fleet or specific project).
-    Also registers live robot presence, battery, and target project.
+    Also handles multi-robot configuration routing and telemetry masking.
     """
     client_ip = request.client.host if request.client else "unknown"
+    robot_cfg = None
+
     if x_robot_mac:
-        robot_registry.record_heartbeat(
+        robot_store.record_heartbeat(
             mac=x_robot_mac,
             ip=client_ip,
-            project=x_robot_project or project,
+            requested_project=x_robot_project or project,
             battery=x_robot_battery,
             charging=x_robot_charging,
             version=x_robot_version
         )
-    return collector.get_telemetry(project_id=project)
+        effective_project, robot_cfg = robot_store.get_effective_project(x_robot_mac, explicit_project=project)
+        telemetry = collector.get_telemetry(project_id=effective_project)
+    else:
+        telemetry = collector.get_telemetry(project_id=project)
+
+    # Security / Privacy: If robot config specifies hiding billing on physical screen, mask it
+    if robot_cfg and not robot_cfg.get("show_billing", True):
+        telemetry = dict(telemetry)
+        telemetry["billing"] = {
+            "mtd_usd": 0.0,
+            "today_usd": 0.0,
+            "budget_pct": 0.0,
+            "hidden": True
+        }
+
+    # Inject robot configuration block if called by a robot (without exposing any credentials)
+    if robot_cfg:
+        telemetry = dict(telemetry)
+        telemetry["robot_config"] = {
+            "mac": robot_cfg.get("mac"),
+            "name": robot_cfg.get("name"),
+            "assigned_project": robot_cfg.get("assigned_project", "ALL FLEET"),
+            "sound_alerts": robot_cfg.get("sound_alerts", True),
+            "show_billing": robot_cfg.get("show_billing", True),
+            "poll_interval_sec": robot_cfg.get("poll_interval_sec", 15),
+            "display_mode": robot_cfg.get("display_mode", "standard"),
+        }
+
+    return telemetry
 
 @app.get("/api/v1/gcp/robots", dependencies=[Depends(verify_authentication)])
 async def get_connected_robots():
     """
-    Returns list of connected physical StackChan robots with battery, IP, and assigned project.
+    Returns list of connected and configured physical StackChan robots with battery, IP,
+    assigned project, and feature configurations. Never exposes credentials.
     """
-    return {"robots": robot_registry.get_robots()}
+    return {
+        "projects": ["ALL FLEET"] + settings.project_ids,
+        "robots": robot_store.get_all_robots()
+    }
+
+@app.post("/api/v1/gcp/robots/{mac}/config", dependencies=[Depends(verify_authentication)])
+async def update_robot_config(mac: str, payload: RobotConfigPayload):
+    """
+    Updates the per-robot configuration (friendly name, assigned project, alerts, billing).
+    Persists configuration in real-time.
+    """
+    updates = {k: v for k, v in payload.dict().items() if v is not None}
+    if "assigned_project" in updates:
+        valid_projects = ["ALL FLEET"] + settings.project_ids
+        if updates["assigned_project"] not in valid_projects:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid project '{updates['assigned_project']}'. Must be one of: {valid_projects}"
+            )
+    updated = robot_store.update_config(mac, updates)
+    return {"status": "success", "robot": updated}
+
+@app.delete("/api/v1/gcp/robots/{mac}", dependencies=[Depends(verify_authentication)])
+async def delete_robot(mac: str):
+    """
+    Deletes a robot from the registry.
+    """
+    removed = robot_store.delete_robot(mac)
+    return {"status": "success", "deleted": removed, "mac": mac}
 
 @app.post("/api/v1/gcp/webhook", dependencies=[Depends(verify_authentication)])
 async def gcp_alert_webhook(payload: Dict[str, Any]):
@@ -205,24 +225,41 @@ async def get_gcp_projects():
     return collector.get_projects_list()
 
 @app.get("/api/v1/gcp/summary", dependencies=[Depends(verify_authentication)])
-async def get_gcp_summary():
+async def get_gcp_summary(
+    x_robot_mac: Optional[str] = Header(None, alias="X-Robot-MAC"),
+):
     """
     Shorter 1-line summary for ambient screensaver and text tickers.
+    Automatically customized to the querying StackChan's assigned project.
     """
-    data = collector.get_telemetry()
+    effective_project = None
+    robot_cfg = None
+    if x_robot_mac:
+        effective_project, robot_cfg = robot_store.get_effective_project(x_robot_mac)
+
+    data = collector.get_telemetry(project_id=effective_project)
     status_str = data.get("status", "ok").upper()
     gke_pods = data.get("gke", {}).get("pods_running", 0)
     vm_count = data.get("vm", {}).get("instances_running", 0)
     mtd = data.get("billing", {}).get("mtd_usd", 0.0)
     alerts = data.get("incident_count", 0)
     total_projects = data.get("total_projects", 1)
+    target_name = effective_project or f"Fleet ({total_projects} Projects)"
     
+    # Hide billing if configured
+    if robot_cfg and not robot_cfg.get("show_billing", True):
+        ticker_msg = f"[{status_str}] {target_name}: {gke_pods} Pods | {vm_count} VMs | Alerts: {alerts}"
+    else:
+        ticker_msg = f"[{status_str}] {target_name}: {gke_pods} Pods | {vm_count} VMs | ${mtd:.2f} MTD | Alerts: {alerts}"
+
     return {
         "status": status_str,
-        "ticker": f"[{status_str}] Fleet ({total_projects} Projects): {gke_pods} Pods | {vm_count} VMs | ${mtd:.2f} MTD | Alerts: {alerts}",
+        "ticker": ticker_msg,
         "incident_count": alerts,
+        "project": effective_project or "ALL FLEET",
         "total_projects": total_projects
     }
+
 
 @app.get("/", response_class=HTMLResponse, dependencies=[Depends(verify_authentication)])
 @app.get("/dashboard", response_class=HTMLResponse, dependencies=[Depends(verify_authentication)])
